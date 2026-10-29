@@ -1,19 +1,90 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import logo from "../assets/logo.png";
+import { createPaymentIntent, deepGet, loadStripe } from "../api/moversly";
 import { INDIA_IMPORT, SG_EXPORT } from "../data/content";
 import { GENERAL_DOCS, TERMS, fmtDate, money } from "../lib/quote";
 
-// Steps 3–5 of the v4 design: quotation, payment (simulation), Move Pass, documents.
+// Steps 3–5 of the v4 design: quotation, payment (Stripe), Move Pass, documents.
 
-const Nav = ({ backLabel, onBack, nextLabel, onNext }) => (
+const Nav = ({ backLabel, onBack, nextLabel, onNext, nextDisabled }) => (
   <div className="flow-nav noprint">
     <button type="button" className="btn-out" onClick={onBack}>← {backLabel}</button>
-    {onNext && <button type="button" className="btn-big only-desktop" onClick={onNext}>{nextLabel} <span aria-hidden="true">→</span></button>}
+    {onNext && <button type="button" className="btn-big only-desktop" onClick={onNext} disabled={nextDisabled}>{nextLabel} <span aria-hidden="true">→</span></button>}
   </div>
 );
 
+const NO_PRICE = {
+  origin: "Online prices are for moves from Singapore for now. Our team will send your quotation for a move from Malaysia.",
+  city: "We don't have an online price for this city yet. Our team will send your quotation.",
+  volume: "Your move is larger than our online price list. Our team will send your quotation.",
+};
+
+const SHIP_TEXT = {
+  Console: ["Shared container (Console)", "Lower price. Your goods share a container with other moves, so shipping takes longer."],
+  "20' FCL": ["Your own 20-foot container (20' FCL)", "Faster. The container is only for your goods and ships as soon as it is packed."],
+  "40' FCL": ["Your own 40-foot container (40' FCL)", "The container is only for your goods and ships as soon as it is packed."],
+};
+
 /* ── Step 3: quotation ─────────────────────────────────── */
-export function QuoteStep({ info, onBack, onNext }) {
+function PricePanel({ info }) {
+  const { quote, price, pricing } = info;
+  if (info.total === 0)
+    return (
+      <section className="panel panel-pad-sm">
+        <p className="rp-alert">Scan or add at least one room first, so we can price your move.</p>
+      </section>
+    );
+  if (pricing.error)
+    return (
+      <section className="panel panel-pad-sm">
+        <p className="rp-alert" role="alert">{pricing.error}</p>
+        <button type="button" className="btn-out mt14" onClick={info.retry}>Try again</button>
+      </section>
+    );
+  if (!quote)
+    return (
+      <section className="panel panel-pad-sm">
+        <p className="small muted">Saving your inventory and getting your price…</p>
+      </section>
+    );
+  const options = quote.options || [];
+  return (
+    <section className="panel">
+      <dl className="price-list">
+        <div><dt>Confirmed inventory volume (customer-edited)</dt><dd>{info.volume} · {quote.cft} CFT</dd></div>
+        {price != null && <div><dt>Rate band</dt><dd>{quote.type} · {quote.band}</dd></div>}
+        {price != null && <div><dt>Door-to-door moving services</dt><dd>{money(price)}</dd></div>}
+      </dl>
+      {options.length > 1 && (
+        <fieldset className="ship-opts">
+          <legend className="strong">Your volume fits two ways to ship. Choose one:</legend>
+          {options.map((o) => {
+            const [title, sub] = SHIP_TEXT[o.type] || [o.type, ""];
+            return (
+              <label key={o.type} className={`ship-opt ${o.type === quote.type ? "on" : ""}`}>
+                <input type="radio" name="ship-opt" checked={o.type === quote.type} onChange={() => info.choose(o.type)} />
+                <span className="grow">
+                  <span className="strong">{title}</span>
+                  <span className="small muted block">{sub}</span>
+                </span>
+                <span className="strong nowrap">{money(o.price)}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+      )}
+      {price != null ? (
+        <div className="price-total">
+          <span>Moving price</span>
+          <span className="big-money">{money(price)}</span>
+        </div>
+      ) : (
+        <p className="doc-missing">{NO_PRICE[quote.reason]}</p>
+      )}    </section>
+  );
+}
+
+export function QuoteStep({ info, onBack, onNext, nextLabel, nextDisabled }) {
   const [termsOpen, setTermsOpen] = useState(false);
   const schedule = [
     ["Pickup", info.dateLong],
@@ -27,7 +98,7 @@ export function QuoteStep({ info, onBack, onNext }) {
         <h1>Your door-to-door moving <span className="accent-text">quotation</span></h1>
         <div className="step-sub">
           {info.fromName} → {info.toName}
-          <span className="chip-tint">Illustrative instant estimate</span>
+          <span className="chip-tint">Instant quotation</span>
         </div>
       </div>
 
@@ -85,21 +156,11 @@ export function QuoteStep({ info, onBack, onNext }) {
         </div>
       </div>
 
-      <section className="panel">
-        <dl className="price-list">
-          <div><dt>Confirmed inventory volume (customer-edited)</dt><dd>{info.volume}</dd></div>
-          <div><dt>Illustrative door-to-door moving services</dt><dd>{money(info.price)}</dd></div>
-          <div className="soft"><dt>Optional insurance</dt><dd>Selected at checkout</dd></div>
-        </dl>
-        <div className="price-total">
-          <span>Estimated moving price*</span>
-          <span className="big-money">{money(info.price)}</span>
-        </div>
-      </section>
+      <PricePanel info={info} />
 
       <div className="two-cards">
         <div className="panel panel-pad-sm">
-          <div className="strong ok-text">✓ Included in this example:</div>
+          <div className="strong ok-text">✓ Included:</div>
           <p className="small muted mt8">origin packing and pickup, export coordination, ocean freight arrangement, destination clearance coordination, local delivery and standard unpacking.</p>
         </div>
         <div className="panel panel-pad-sm">
@@ -115,27 +176,114 @@ export function QuoteStep({ info, onBack, onNext }) {
         {termsOpen && <ul className="terms">{TERMS.map((t) => <li key={t}>{t}</li>)}</ul>}
       </section>
 
-      <Nav backLabel="Edit survey" onBack={onBack} nextLabel="Next: payment" onNext={onNext} />
+      <Nav backLabel="Edit survey" onBack={onBack} nextLabel={nextLabel} onNext={onNext} nextDisabled={nextDisabled} />
     </>
   );
 }
 
-/* ── Step 4: payment (simulation) ──────────────────────── */
-export function PaymentStep({ info, pay, setPay, ready, onConfirm, onBack, onEdit }) {
-  const set = (k, val) => setPay((p) => ({ ...p, [k]: val }));
+/* ── Step 4: payment (Stripe, as in the Malaysia project) ── */
+// payment-intent on api.moversly.com returns a Stripe clientSecret; card and
+// PayNow are completed in-page with Stripe's Payment Element. One payment intent
+// per order and amount: opening the payment page again reuses it, so Stripe
+// doesn't collect a new unfinished payment on every visit.
+const intents = new Map();
+function paymentIntentFor({ orderId, email, name, amount }) {
+  const key = `${orderId}:${amount}`;
+  if (!intents.has(key)) {
+    intents.set(key, createPaymentIntent({ orderId, email, name, amount }).catch((e) => {
+      intents.delete(key);
+      throw e;
+    }));
+  }
+  return intents.get(key);
+}
+
+function useStripePayment({ orderId, email, name, amount, onPaid }) {
+  const [state, setState] = useState({ ready: false, error: "", processing: false });
+  const stripeRef = useRef(null);
+  const elementsRef = useRef(null);
+  const mountRef = useRef(null);
+
+  useEffect(() => {
+    // Back from a bank or 3-D Secure page: Stripe adds the result to the URL.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("redirect_status") === "succeeded") {
+      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+      onPaid(params.get("payment_intent"));
+      return;
+    }
+    if (amount == null) return;
+    let alive = true;
+    let element = null;
+    (async () => {
+      try {
+        const stripe = await loadStripe(); // first, so no payment is opened if Stripe can't load
+        const res = await paymentIntentFor({ orderId, email, name, amount });
+        const secret = deepGet(res, ["clientSecret", "client_secret"]);
+        if (!secret) throw new Error("The server didn't return a payment session. Please try again.");
+        if (!alive) return;
+        stripeRef.current = stripe;
+        elementsRef.current = stripe.elements({ clientSecret: secret, appearance: { variables: { colorPrimary: "#067878", borderRadius: "10px" } } });
+        element = elementsRef.current.create("payment", { paymentMethodOrder: ["card", "paynow"] });
+        element.on("ready", () => alive && setState((s) => ({ ...s, ready: true })));
+        element.mount(mountRef.current);
+      } catch (e) {
+        if (alive) setState((s) => ({ ...s, error: e.message || "Could not start the payment. Please try again." }));
+      }
+    })();
+    return () => {
+      alive = false;
+      element?.destroy();
+    };
+    // One payment session per order and amount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, amount]);
+
+  const pay = async () => {
+    if (state.processing || !stripeRef.current || !elementsRef.current) return;
+    setState((s) => ({ ...s, processing: true, error: "" }));
+    try {
+      const { error, paymentIntent } = await stripeRef.current.confirmPayment({
+        elements: elementsRef.current,
+        confirmParams: { return_url: window.location.href },
+        redirect: "if_required",
+      });
+      if (error) throw new Error(error.message);
+      if (!["succeeded", "processing", "requires_capture"].includes(paymentIntent?.status)) throw new Error("Payment wasn't completed. Please try again.");
+      onPaid(paymentIntent.id);
+    } catch (e) {
+      setState((s) => ({ ...s, processing: false, error: e.message || "Payment failed. Please try again." }));
+    }
+  };
+
+  return { ...state, mountRef, pay };
+}
+
+export function PaymentStep({ info, agreed, setAgreed, onPaid, onBack, onEdit }) {
+  const stripe = useStripePayment({ orderId: info.orderId, email: info.v.email, name: info.v.name, amount: info.price, onPaid });
   const initials = info.v.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
   const agreements = [
     ["reviewed", "I have reviewed the quotation scope, exclusions, schedule estimates, cancellation terms and APAC Relocation contractual responsibility."],
-    ["understood", "I understand optional cargo insurance is separate from APAC Relocation's contractual obligations and is subject to actual insurer policy terms."],
+    ["understood", "I understand cargo insurance is not included and is separate from APAC Relocation's contractual obligations."],
   ];
+  const ticked = agreed.reviewed && agreed.understood;
+
+  if (info.price == null)
+    return (
+      <>
+        <div className="step-title"><h1>Review &amp; book your <span className="accent-text">move</span></h1></div>
+        <section className="panel panel-pad-sm">
+          <p className="doc-missing">Open your quotation first: it prices your move from your AI survey.</p>
+          <button type="button" className="btn-out mt14" onClick={onBack}>← Quotation</button>
+        </section>
+      </>
+    );
+
   return (
     <>
       <div className="step-title">
-        <div className="title-row">
-          <h1>Review &amp; book your <span className="accent-text">move</span></h1>
-          <span className="sim-badge">SIMULATION</span>
-        </div>
-        <p className="step-sub">One payment to APAC Relocation. No card details are collected and no money moves.</p>
+        <h1>Review &amp; book your <span className="accent-text">move</span></h1>
+        <p className="step-sub">One secure payment to APAC Relocation, by card or PayNow.</p>
       </div>
 
       <section className="panel who">
@@ -148,60 +296,42 @@ export function PaymentStep({ info, pay, setPay, ready, onConfirm, onBack, onEdi
         <button type="button" className="link" onClick={onEdit}>Edit</button>
       </section>
 
-      <div className="caps extras-k">Extras</div>
-      <section className={`panel panel-pad-sm ins ${pay.insured ? "on" : ""}`}>
-        <div className="ins-row">
-          <div className="grow">
-            <div className="h-17">Add shipment insurance at 3% of declared value</div>
-            <div className="small muted mt6">Opt-in only. A real purchase requires approved insurer, coverage details, exclusions, deductible, policy document and any required disclosures.</div>
-          </div>
-          <button type="button" role="switch" aria-checked={pay.insured} aria-label="Add shipment insurance" className={`switch ${pay.insured ? "on" : ""}`} onClick={() => set("insured", !pay.insured)}>
-            <span />
-          </button>
-        </div>
-        {pay.insured && (
-          <div className="ins-value">
-            <label className="declared">
-              Declared value of your goods
-              <span className="declared-box">
-                <span className="muted">SGD</span>
-                <input type="number" min="0" step="100" inputMode="numeric" placeholder="20000" value={pay.declared} onChange={(e) => set("declared", e.target.value)} />
-              </span>
-            </label>
-            <p className="small muted">Premium <b className="ink">{money(info.premium)}</b></p>
-          </div>
-        )}
-      </section>
-
       <section className="panel">
         <dl className="price-list">
-          <div><dt>Moving services</dt><dd>{money(info.price)}</dd></div>
-          <div><dt>Optional insurance premium</dt><dd>{money(info.premium)}</dd></div>
+          <div><dt>Door-to-door moving services</dt><dd>{money(info.price)}</dd></div>
+          <div className="soft"><dt>{info.quote.type} · {info.quote.band}</dt><dd>{info.volume}</dd></div>
         </dl>
         <div className="price-total">
-          <span>Illustrative subtotal</span>
-          <span className="big-money">{money(info.price + info.premium)}</span>
+          <span>Total to pay</span>
+          <span className="big-money">{money(info.price)}</span>
         </div>
-        <p className="sim-note">Not a final payable total: taxes, duties and other applicable fees are not calculated. No real payment will be taken in this simulation.</p>
       </section>
 
       <section className="panel agree">
         {agreements.map(([k, text]) => {
-          const other = k === "reviewed" ? pay.understood : pay.reviewed;
+          const other = k === "reviewed" ? agreed.understood : agreed.reviewed;
           return (
-            <label key={k} className={`agree-row ${!pay[k] && other ? "attention" : ""}`}>
-              <input type="checkbox" checked={pay[k]} onChange={() => set(k, !pay[k])} />
+            <label key={k} className={`agree-row ${!agreed[k] && other ? "attention" : ""}`}>
+              <input type="checkbox" checked={agreed[k]} onChange={() => setAgreed((a) => ({ ...a, [k]: !a[k] }))} />
               <span>{text}</span>
             </label>
           );
         })}
       </section>
 
-      <div className="pay-nav only-desktop">
-        <button type="button" className="btn-out" onClick={onBack}>← Quotation</button>
+      <section className="panel panel-pad-sm">
+        {!stripe.ready && !stripe.error && <p className="small muted">Loading secure payment…</p>}
+        <div ref={stripe.mountRef} />
+        {stripe.error && <p className="rp-alert mt14" role="alert">{stripe.error}</p>}
+      </section>
+
+      <div className="pay-nav">
+        <button type="button" className="btn-out only-desktop" onClick={onBack}>← Quotation</button>
         <div className="pay-cta">
-          <button type="button" className="btn-pay" disabled={!ready} onClick={onConfirm}>Simulate payment &amp; confirm booking</button>
-          {!ready && <span className="pay-hint">Tick both boxes above to continue.</span>}
+          <button type="button" className="btn-pay" disabled={!ticked || !stripe.ready || stripe.processing} onClick={stripe.pay}>
+            {stripe.processing ? "Processing…" : `Pay ${money(info.price)}`}
+          </button>
+          {!ticked && <span className="pay-hint">Tick both boxes above to continue.</span>}
         </div>
       </div>
     </>
@@ -244,23 +374,28 @@ export function PassStep({ info, onBack, onNext }) {
         </div>
         <div className="pass-tear" aria-hidden="true"><span /></div>
         <div className="pass-foot">
-          <div className="caps">Total</div>
-          <div className="pass-total">{money(b.total)}</div>
-          <div className="ok-text tiny strong mt6">✓ Confirmed · simulated payment</div>
+          <div className="caps">{b.paid ? "Paid" : "Price"}</div>
+          <div className="pass-total">{b.paid ? money(b.total) : "To be quoted"}</div>
+          <div className="ok-text tiny strong mt6">{b.paid ? "✓ Confirmed · payment received" : "✓ Quote request received"}</div>
         </div>
       </article>
 
       <div className="pass-text">
-        <span className="ok-chip">✓ Booking confirmed</span>
-        <h1 className="pass-h1">Your move to India is <span className="accent-text">booked</span></h1>
-        <p className="step-sub">Simulated payment only. No money was taken. In the live version, a confirmation is sent to {info.v.email}.</p>
+        <span className="ok-chip">{b.paid ? "✓ Booking confirmed" : "✓ Request received"}</span>
+        <h1 className="pass-h1">
+          {b.paid ? <>Your move to India is <span className="accent-text">booked</span></> : <>Your quote is <span className="accent-text">on its way</span></>}
+        </h1>
+        <p className="step-sub">
+          {b.paid
+            ? `Thank you, your payment is received. Our India office will contact you at ${info.v.email} to plan your pickup.`
+            : `Our team has your inventory and will send your quotation to ${info.v.email}.`}
+        </p>
         <dl className="panel pass-list">
           <div><dt>Booking reference</dt><dd className="strong">{b.ref}</dd></div>
-          <div><dt>Optional insurance premium</dt><dd>{money(b.premium)}</dd></div>
-          <div><dt>Illustrative subtotal</dt><dd className="strong accent-text">{money(b.total)}</dd></div>
+          {b.paid && <div><dt>Amount paid</dt><dd className="strong accent-text">{money(b.total)}</dd></div>}
         </dl>
         <div className="noprint mt14"><button type="button" className="btn-out" onClick={() => window.print()}>Print or save PDF</button></div>
-        <p className="tint-box mt24">Next, check the documents you need for customs. Our India office will contact you to confirm the final price and pickup date.</p>
+        <p className="tint-box mt24">Next, check the documents you need for customs. Our India office will contact you to confirm your pickup date.</p>
         <div className="noprint pass-nav only-desktop">
           <button type="button" className="btn-out" onClick={onBack}>← Quotation</button>
           <button type="button" className="btn-big" onClick={onNext}>Next: documents <span aria-hidden="true">→</span></button>

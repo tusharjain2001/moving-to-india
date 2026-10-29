@@ -1,9 +1,17 @@
 // Moversly order API (api.moversly.com): the same calls and payloads as the
-// Malaysia project (malaysia-project/src/api/client.js), steps 1 and 2 only.
+// Malaysia project (malaysia-project/src/api/client.js).
 //   1. create the order / lead (sends an OTP email to new users, returns order_id)
 //   2. confirm the email OTP (or resend it)
+//   3. update the same order with the AI survey items and volume
+//   4. save the price on the order (create-pricing-with-split); the price comes
+//      from the sales team's sheet (src/api/pricing.js), not the pricing API
+//   5. payment intent (Stripe clientSecret), paid in-page with Stripe's Payment Element
+//   6. read the order back
 
 const BASE = "https://api.moversly.com";
+const CURRENCY = "SGD";
+const M3_TO_FT3 = 35.3147;
+const FALLBACK_KG_PER_M3 = 110; // the AI survey gives no weights; same estimate as the Malaysia project
 
 export const DEFAULT_SHIPMENT_MODE = "SEA"; // AIR | SEA | ROAD
 export const DEFAULT_SHIPMENT_TYPE = "CONSOLE"; // CONSOLE | FCL
@@ -111,6 +119,92 @@ export function resendConfirmationCode(email) {
     method: "POST",
     body: { user_name: email },
   });
+}
+
+// Step 3: the same order with items + volume. The backend parses dimensions as
+// "L x W x H" (lowercase x, numbers only), so they are sent in cm without a unit.
+// items: [{ name, room, dims: [m, m, m], qty }]. Returns the resolved ports and container.
+export function updateOrderWithItems({ orderId, values, items }) {
+  const roomNames = [...new Set(items.map((it) => it.room).filter(Boolean))];
+  const unitM3 = (it) => it.dims[0] * it.dims[1] * it.dims[2];
+  const apiItems = items.map((it) => ({
+    name: it.name,
+    dimensions: it.dims.map((m) => Math.round(m * 100)).join(" x "),
+    quantity: String(it.qty),
+    volumeFt3: (unitM3(it) * M3_TO_FT3).toFixed(2),
+    volumeM3: unitM3(it).toFixed(2),
+    weightKg: String(Math.round(unitM3(it) * FALLBACK_KG_PER_M3)),
+  }));
+  const totalM3 = items.reduce((s, it) => s + unitM3(it) * it.qty, 0);
+  return req("/api/v1/order/create-order-for-pricing", {
+    method: "POST",
+    body: {
+      order_id: orderId,
+      ...buildBaseOrderPayload(values),
+      ...(roomNames.length ? { room_name: roomNames.join(", ") } : {}),
+      volume: { magnitude: totalM3.toFixed(2), unit: "CUBIC_M" },
+      items: apiItems,
+      total_volume: Math.round(totalM3),
+      total_volume_ft3: Math.round(totalM3 * M3_TO_FT3),
+      total_weight: Math.round(totalM3 * FALLBACK_KG_PER_M3),
+      recommended_container: "",
+    },
+  });
+}
+
+// Step 4: save the price on the order. The backend expects only these fields
+// (the Malaysia project found that extra fields cause an error), with from_survey_app: true.
+// quote: the chosen sheet price plus the ports from the step-3 response.
+export function savePricingSplit(orderId, quote) {
+  return req("/api/v1/order/create-pricing-with-split", {
+    method: "POST",
+    body: {
+      order_id: orderId,
+      volume: { magnitude: String(quote.cft), unit: "CUBIC_FT" },
+      container_type: quote.container_type,
+      shipment_type: quote.shipment_type,
+      origin_port: quote.origin_port,
+      destination_port: quote.destination_port,
+      final_price: { currency: quote.currency, amount: String(quote.price) },
+      from_survey_app: true,
+    },
+  });
+}
+
+// Step 5: payment intent. Money.amount is a string per the API schema.
+export function createPaymentIntent({ orderId, email, name, amount, currency = CURRENCY }) {
+  return req("/api/v1/order/survey-app/payment-intent", {
+    method: "POST",
+    body: { orderId, email, name, amount: { currency, amount: String(amount) } },
+  });
+}
+
+// Step 6: the full order.
+export function getOrder(orderId) {
+  return req(`/api/v1/order/${encodeURIComponent(orderId)}`);
+}
+
+// Stripe: the publishable key must match the mode of the backend's Stripe secret
+// key. Default: the live key the Malaysia project uses (publishable keys are public),
+// so a real card is really charged. Set VITE_STRIPE_PUBLISHABLE_KEY to a test key
+// once the Moversly team switches payment-intent to test mode.
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "pk_live_A4pqzjSx03dGMpIPIMrGzaIi00myhVoZVz";
+let stripePromise = null;
+export function loadStripe() {
+  if (!stripePromise) {
+    stripePromise = new Promise((resolve, reject) => {
+      if (window.Stripe) return resolve(window.Stripe(STRIPE_PUBLISHABLE_KEY));
+      const s = document.createElement("script");
+      s.src = "https://js.stripe.com/v3";
+      s.onload = () => (window.Stripe ? resolve(window.Stripe(STRIPE_PUBLISHABLE_KEY)) : reject(new Error("Stripe.js failed to start.")));
+      s.onerror = () => {
+        stripePromise = null;
+        reject(new Error("Could not load the secure payment form. Check your connection and try again."));
+      };
+      document.head.appendChild(s);
+    });
+  }
+  return stripePromise;
 }
 
 // Google Maps (Places search). Key from .env: VITE_GOOGLE_PLACES_API_KEY.

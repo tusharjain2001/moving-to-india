@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cityByName } from "../data/content";
+import { deepGet, savePricingSplit, updateOrderWithItems } from "../api/moversly";
+import { getSheetPrice } from "../api/pricing";
 import { placeCity, placeCode } from "../lib/move";
-import { premiumOf, priceOf, transitOf, fmtDate, money } from "../lib/quote";
+import { transitOf, fmtDate, money } from "../lib/quote";
 import { M3_TO_FT3, roomVolume, shippingGuide } from "../lib/units";
 import { useSurvey } from "../lib/useSurvey";
 import { DocsStep, PassStep, PaymentStep, QuoteStep } from "./FlowSteps";
@@ -19,14 +21,18 @@ const PREV = {
 };
 
 /**
- * Steps 2–5 of the booking flow (Claude Design "India Booking Flow v4"):
- * AI survey, quotation, payment (simulation) with the Move Pass, documents.
- * Prices are the design's illustrative estimate, not live rates.
+ * Steps 2–5 of the booking flow (Claude Design "India Booking Flow v4"), connected like
+ * the Malaysia project: opening the quotation sends the survey items to the order,
+ * looks up the price in the sales sheet and saves it on the order; payment is a real
+ * Stripe payment through the Moversly payment-intent API. Without a sheet price
+ * (city without a tab, Malaysia origin, very large move) the customer sends a quote request.
  */
 export default function BookingFlow({ step, move, update, go, onNewMove }) {
   const survey = useSurvey();
   const { rooms } = survey;
-  const [pay, setPay] = useState({ insured: false, declared: "", reviewed: false, understood: false });
+  const [agreed, setAgreed] = useState({ reviewed: false, understood: false });
+  const [pricing, setPricing] = useState({ loading: false, error: "" });
+  const [attempt, setAttempt] = useState(0);
 
   const v = move.values;
   const booking = move.booking || null;
@@ -34,10 +40,53 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
   const total = rooms.reduce((s, r) => s + roomVolume(r), 0);
   const itemCount = rooms.reduce((s, r) => s + r.items.reduce((n, it) => n + it.qty, 0), 0);
   const scanned = rooms.filter((r) => r.status === "done").length;
-  const price = priceOf(v.toChoice, total);
-  const premium = premiumOf(pay.insured, pay.declared);
   const transit = transitOf(v.toChoice);
   const fromSG = v.fromChoice !== "Malaysia";
+
+  // The quote belongs to this route and inventory; any edit in the survey gets a new one.
+  const items = rooms.flatMap((r) => r.items.map((it) => ({ name: it.label, room: r.name, dims: it.dims, qty: it.qty })));
+  const sig = JSON.stringify([v.origin, v.dest, items.map((it) => [it.name, it.dims.map((d) => d.toFixed(2)), it.qty])]);
+  const quote = move.quote?.sig === sig ? move.quote : null;
+  const price = quote?.price ?? null;
+
+  useEffect(() => {
+    if (step !== "quote" || quote || total === 0) return;
+    let alive = true;
+    setPricing({ loading: true, error: "" });
+    (async () => {
+      try {
+        const meta = await updateOrderWithItems({ orderId: move.orderId, values: v, items });
+        const result = await getSheetPrice({ origin: v.fromChoice, city: city ? city.name : placeCity(v.dest), volumeM3: total });
+        const saved = {
+          sig,
+          ...result,
+          origin_port: deepGet(meta, ["origin_port", "originPort"]) || "Singapore",
+          destination_port: deepGet(meta, ["destination_port", "destinationPort"]) || result.port,
+        };
+        // The cheapest option is chosen first; the customer can switch on the quotation.
+        // As in the Malaysia project: the customer still sees the price if saving it fails.
+        if (result.price != null) await savePricingSplit(move.orderId, saved).catch((e) => console.warn("create-pricing-with-split failed:", e));
+        if (!alive) return;
+        update({ ...move, quote: saved });
+        setPricing({ loading: false, error: "" });
+      } catch (e) {
+        if (alive) setPricing({ loading: false, error: e.message || "We couldn't prepare your quotation. Please try again." });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // sig stands for the inventory and route; move and update change with every save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, sig, attempt]);
+
+  // Console (shared, slower) or 20' FCL (own container, faster) where both fit: the
+  // chosen option's fields replace the top-level ones, and the order gets the new price.
+  const choose = (type) => {
+    const next = { ...quote, ...quote.options.find((o) => o.type === type) };
+    update({ ...move, quote: next });
+    savePricingSplit(move.orderId, next).catch((e) => console.warn("create-pricing-with-split failed:", e));
+  };
 
   const info = {
     v,
@@ -47,8 +96,11 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
     total,
     itemCount,
     scanned,
+    quote,
     price,
-    premium,
+    pricing,
+    choose,
+    retry: () => setAttempt((a) => a + 1),
     transit,
     fromSG,
     volume: `${total.toFixed(1)} m³`,
@@ -64,13 +116,12 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
     dateLong: fmtDate(v.date),
   };
 
-  const ready = pay.reviewed && pay.understood;
-  const confirmBooking = () => {
-    if (!ready) return;
-    // Simulation: nothing is charged. The Moversly order number is the booking reference.
-    update({ ...move, booking: { ref: move.orderId, premium, total: price + premium, insured: pay.insured, declared: pay.declared, at: new Date().toISOString() } });
+  const book = (fields) => {
+    update({ ...move, booking: { ref: move.orderId, total: price, at: new Date().toISOString(), ...fields } });
     go("pass");
   };
+  const onPaid = (paymentId) => book({ paid: true, paymentId });
+  const requestQuote = () => book({ requested: true, total: null });
 
   const idx = STEP_INDEX[step];
   const [prevRoute, prevLabel] = PREV[step];
@@ -80,17 +131,21 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
     else if (target) go(target);
   };
 
+  const quoteReady = !!quote && !pricing.loading;
   const cta = {
     survey: { label: "Next: quotation", action: () => go("quote") },
-    quote: { label: "Next: payment", action: () => go("payment") },
-    payment: { label: "Simulate payment & confirm", action: confirmBooking, disabled: !ready, hint: !ready },
+    quote:
+      quoteReady && price == null
+        ? { label: "Send my quote request", action: requestQuote }
+        : { label: "Next: payment", action: () => go("payment"), disabled: !quoteReady },
+    payment: null, // the pay button sits under the Stripe form on every screen size
     pass: { label: "Next: documents", action: () => go("documents") },
     documents: { label: "Save as PDF", action: () => window.print() },
   }[step];
 
-  const asideTotal = booking ? booking.total : step === "payment" ? price + premium : price;
-  const asideTotalLabel = booking ? "Illustrative subtotal (simulated payment)" : step === "payment" ? "Illustrative subtotal" : "Estimated moving price*";
-  const asideIns = booking ? money(booking.premium) : step === "payment" ? money(premium) : "Selected at checkout";
+  const asideTotal = booking ? booking.total : price;
+  const asideTotalLabel = booking?.paid ? "Paid" : booking?.requested ? "Quote requested" : "Moving price";
+  const priceText = (n) => (n != null ? money(n) : pricing.loading ? "Calculating…" : step === "survey" ? "After the survey" : "Our team will quote");
 
   return (
     <div className="flow">
@@ -99,9 +154,9 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
       <div className={`flow-body ${step === "pass" ? "wide" : ""}`}>
         <main className="flow-main">
           {step === "survey" && <SurveyStep survey={survey} info={info} onBack={() => go("home")} onNext={() => go("quote")} />}
-          {step === "quote" && <QuoteStep info={info} onBack={() => go("survey")} onNext={() => go("payment")} />}
+          {step === "quote" && <QuoteStep info={info} onBack={() => go("survey")} onNext={cta.action} nextLabel={cta.label} nextDisabled={cta.disabled} />}
           {step === "payment" && (
-            <PaymentStep info={info} pay={pay} setPay={setPay} ready={ready} onConfirm={confirmBooking} onBack={() => go("quote")} onEdit={() => go("home")} />
+            <PaymentStep info={info} agreed={agreed} setAgreed={setAgreed} onPaid={onPaid} onBack={() => go("quote")} onEdit={() => go("home")} />
           )}
           {step === "pass" && <PassStep info={info} onBack={() => go("quote")} onNext={() => go("documents")} />}
           {step === "documents" && <DocsStep info={info} onBack={() => go("pass")} />}
@@ -125,21 +180,17 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
               <div><dt>Pickup</dt><dd>{info.dateShort}</dd></div>
               <div><dt>Shipment</dt><dd>{info.typeLabel}</dd></div>
               <div><dt>Volume</dt><dd>{info.volume} · {info.ft3}</dd></div>
-              <div><dt>Shipping</dt><dd>{info.shipping}</dd></div>
+              <div><dt>Shipping</dt><dd>{quote?.type || info.shipping}</dd></div>
             </dl>
             <dl className="facts sub">
               <div><dt>Origin office</dt><dd>{info.originOffice}</dd></div>
               <div><dt>Destination office</dt><dd>APAC Relocation India</dd></div>
             </dl>
-            <dl className="facts sub">
-              <div><dt>Moving services</dt><dd>{money(price)}</dd></div>
-              <div><dt>Optional insurance</dt><dd>{asideIns}</dd></div>
-            </dl>
             <div className="booking-total">
               <span>{asideTotalLabel}</span>
-              <span className="total">{money(asideTotal)}</span>
+              <span className="total">{priceText(asideTotal)}</span>
             </div>
-            <p className="booking-note">*Sample, to be confirmed by APAC Relocation. Rates and transit windows are not live confirmations.</p>
+            <p className="booking-note">*Transit windows are samples, to be confirmed by APAC Relocation.</p>
             <div className="booking-new">
               <button type="button" className="link" onClick={onNewMove}>Start a different move</button>
             </div>
@@ -152,14 +203,15 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
         <div className="between">
           <div>
             <div className="small strong">{info.fromCode} ✈ {info.toCode} <span className="muted">· {info.dateShort} · {info.volume}</span></div>
-            <div className="bar-price">{money(asideTotal)}</div>
+            <div className="bar-price">{priceText(asideTotal)}</div>
           </div>
           <span className="muted tiny right">{asideTotalLabel}</span>
         </div>
-        <button type="button" className="btn-big block" onClick={cta.action} disabled={cta.disabled}>
-          {cta.label} <span aria-hidden="true">→</span>
-        </button>
-        {cta.hint && <div className="pay-hint center">Tick both boxes above to continue.</div>}
+        {cta && (
+          <button type="button" className="btn-big block" onClick={cta.action} disabled={cta.disabled}>
+            {cta.label} <span aria-hidden="true">→</span>
+          </button>
+        )}
       </div>
     </div>
   );

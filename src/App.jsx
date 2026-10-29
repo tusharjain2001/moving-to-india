@@ -66,11 +66,12 @@ export default function App() {
   };
 
   // Guard the later screens: they need an order and a verified email; the
-  // Move Pass and documents also need a (simulated) booking.
+  // Move Pass and documents also need a booking (paid, or a quote request).
   let screen = FLOW_ROUTES.includes(route) || route === "verify" || route === "chat" ? route : "home";
   if (screen === "verify" && !move?.orderId) screen = "home";
   if (FLOW_ROUTES.includes(screen) && !(move?.orderId && move.verified)) screen = move?.orderId ? "verify" : "home";
   if ((screen === "pass" || screen === "documents") && !move?.booking) screen = "payment";
+  if (screen === "payment" && move?.booking?.paid) screen = "pass";
 
   if (screen === "verify")
     return (

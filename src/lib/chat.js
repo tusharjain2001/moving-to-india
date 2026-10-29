@@ -2,6 +2,7 @@
 // assistant (moversely/ai/survey/chat.py), adapted to Singapore/Malaysia → India.
 // Our code runs the conversation and checks each answer; common questions get
 // fixed answers from our own data (customs summaries, FAQ), so nothing is made up.
+// Other questions go to the AI on our server (see api/assistant.js).
 import { CITIES, FAQS, INDIA_IMPORT, OTHER_CITY, SERVICES_6, SG_EXPORT } from "../data/content";
 import { CITY_ALIASES } from "./places";
 
@@ -204,9 +205,21 @@ export function label(step, value) {
 
 export const startState = () => ({ step: "from", answers: {}, editing: false });
 
+export const NO_ANSWER = "Sorry, I can't answer that right now. Our moving team will help with it after you finish here.";
+
+/** What the visitor has told the chat so far, for the AI ("Singapore to Mumbai, India, full household"). */
+export function moveContext(a) {
+  const parts = [];
+  if (a.from) parts.push(a.to ? `${fromLabel(a)} to ${toLabel(a)}` : `from ${fromLabel(a)}`);
+  if (a.move_type) parts.push(MOVE_TYPES[a.move_type].toLowerCase());
+  if (a.date) parts.push(`around ${longDate(a.date)}`);
+  return parts.join(", ");
+}
+
 /**
- * One turn of the conversation. Returns the new state and the assistant's
- * replies (the next question is added by the caller).
+ * One turn of the conversation. Returns the new state, the assistant's
+ * replies (the next question is added by the caller), and true when the
+ * question has no fixed answer and should go to the AI.
  */
 export function turn(state, text = "", value = "") {
   const s = { ...state, answers: { ...state.answers } };
@@ -243,7 +256,8 @@ export function turn(state, text = "", value = "") {
   if (problem) return [s, [problem]];
 
   if (text && (asking || isQuestion(text) || step === "edit" || step === "confirm")) {
-    return [s, [fixedAnswer(text, a) || "Sorry, I can't answer that right now. Our moving team will help with it after you finish here."]];
+    const fixed = fixedAnswer(text, a);
+    return fixed ? [s, [fixed]] : [s, [], true];
   }
 
   const hint = {

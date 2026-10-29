@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from "react";
+import { askAssistant } from "../api/assistant";
 import { createOrderForPricing, deepGet } from "../api/moversly";
 import logo from "../assets/logo.png";
-import { GREETING, MOVE_TYPES, fromLabel, label, longDate, question, startState, toFormValues, turn } from "../lib/chat";
+import { GREETING, MOVE_TYPES, NO_ANSWER, fromLabel, label, longDate, moveContext, question, startState, toFormValues, turn } from "../lib/chat";
 import Icon from "./Icons";
 
 const KEY = "moving-to-india:chat";
 const TYPING_MS = 450;
+// Lets the server count AI answers per chat.
+const newId = () => crypto.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (saved?.messages?.length && saved.state) return saved;
+    if (saved?.messages?.length && saved.state) return { id: newId(), ...saved };
   } catch {
     // Fall through to a fresh chat.
   }
@@ -18,7 +21,7 @@ function load() {
 }
 const fresh = () => {
   const state = startState();
-  return { state, messages: [{ role: "assistant", text: GREETING }, { role: "assistant", text: question(state.step, state.answers)[0] }] };
+  return { id: newId(), state, messages: [{ role: "assistant", text: GREETING }, { role: "assistant", text: question(state.step, state.answers)[0] }] };
 };
 
 /**
@@ -58,20 +61,21 @@ export default function ChatPage({ onBack, onSubmitted }) {
   const send = (text, value = "", shown = "") => {
     if (busy || !(text || value)) return;
     const said = text || shown || label(state.step, value);
+    const history = [...messages, { role: "user", text: said }];
     setChat((c) => ({ ...c, messages: [...c.messages, { role: "user", text: said }] }));
     setDraft("");
     setError("");
     setBusy(true);
-    timer.current = setTimeout(() => {
-      setChat((c) => {
-        const [next, replies] = turn(c.state, text, value);
-        const [q] = question(next.step, next.answers);
-        const texts = replies.at(-1) === q ? replies : [...replies, q];
-        return { state: next, messages: [...c.messages, ...texts.map((t) => ({ role: "assistant", text: t }))] };
-      });
+    const [next, replies, needsAI] = turn(state, text, value);
+    const finish = (texts) => {
+      const [q] = question(next.step, next.answers);
+      const all = texts.at(-1) === q ? texts : [...texts, q];
+      setChat((c) => ({ ...c, state: next, messages: [...c.messages, ...all.map((t) => ({ role: "assistant", text: t }))] }));
       setBusy(false);
       inputRef.current?.focus();
-    }, TYPING_MS);
+    };
+    if (needsAI) askAssistant(chat.id, history, moveContext(state.answers)).then((answer) => finish([answer || NO_ANSWER]));
+    else timer.current = setTimeout(() => finish(replies), TYPING_MS);
   };
 
   const restart = () => {

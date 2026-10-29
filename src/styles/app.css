@@ -685,6 +685,14 @@ button.room:hover { box-shadow: 0 0 0 2px var(--accent); }
 .price-list dd { margin: 0; font-weight: 600; white-space: nowrap; }
 .price-list .soft { color: var(--n-700); font-size: 14px; }
 .price-list .soft dd { font-weight: 400; }
+.ship-opts { margin: 0; border: 0; padding: 0 clamp(16px, 2.2vw, 26px) clamp(16px, 2.2vw, 26px); display: grid; gap: 10px; }
+.ship-opts legend { padding: 0; margin-bottom: 10px; font-size: 15px; }
+.ship-opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; box-shadow: 0 0 0 1px rgba(32, 30, 29, 0.12); font-size: 15px; cursor: pointer; }
+.ship-opt:hover { box-shadow: 0 0 0 2px var(--accent); }
+.ship-opt.on { background: var(--accent-100); box-shadow: 0 0 0 2px var(--accent); }
+.ship-opt input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.ship-opt .block { display: block; margin-top: 2px; line-height: 1.45; }
+.ship-opt .nowrap { white-space: nowrap; }
 .price-total { background: var(--accent-100); padding: clamp(16px, 2.2vw, 26px); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px; font-size: 15px; font-weight: 600; }
 .big-money { font-size: clamp(26px, 2.4vw, 32px); font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: var(--accent); }
 .terms-btn { width: 100%; min-height: 56px; padding: 0 20px; border: 0; background: none; display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: 600; text-align: left; }

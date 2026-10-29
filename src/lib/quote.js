@@ -1,36 +1,20 @@
-// Illustrative pricing from the v4 design (not live rates): the city's sample
-// starting price for ~20 m³, plus SGD 55 per extra m³, rounded to 10.
-// To be replaced by the Moversly pricing API once APAC Relocation confirms rates.
-import { CITIES, OTHER_CITY } from "../data/content";
+// Quotation text and helpers. The price itself comes from the sales team's
+// sheet (src/api/pricing.js); transit windows are the design's samples.
+import { CITIES } from "../data/content";
 
-const OTHER = { base: 3300, transit: "14–30 days" };
-export const INSURANCE_RATE = 0.03;
+const OTHER_TRANSIT = "14–30 days";
 
-const parseSgd = (s) => Number(String(s).replace(/[^\d.]/g, ""));
-function cityInfo(toChoice) {
-  const c = CITIES.find((x) => x.name === toChoice);
-  return c ? { base: parseSgd(c.price), transit: c.sea } : toChoice === OTHER_CITY ? OTHER : { base: parseSgd(CITIES[0].price), transit: CITIES[0].sea };
-}
-
-export const transitOf = (toChoice) => cityInfo(toChoice).transit;
-
-export function priceOf(toChoice, totalM3) {
-  const { base } = cityInfo(toChoice);
-  return Math.round((base + Math.max(0, totalM3 - 20) * 55) / 10) * 10;
-}
-
-export const premiumOf = (insured, declared) =>
-  insured ? Math.round(Math.max(0, Number(declared) || 0) * INSURANCE_RATE * 100) / 100 : 0;
+export const transitOf = (toChoice) => CITIES.find((x) => x.name === toChoice)?.sea || OTHER_TRANSIT;
 
 export const money = (n) => "SGD " + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const TERMS = [
-  "This is an illustrative estimate, not a binding offer. APAC Relocation confirms the final price in writing after reviewing your inventory.",
-  "The price is based on the inventory volume shown. If the volume changes, the price is adjusted.",
+  "The price is for the volume band shown, based on your AI survey. APAC Relocation reviews your inventory and confirms the details in writing.",
+  "If the volume at pickup is different, the price is adjusted to the matching band.",
   "The quotation is valid for 14 days.",
   "Transit times are estimates and depend on sailing schedules, customs clearance and capacity.",
   "Duties, taxes and any service not listed as included are charged separately if they apply.",
-  "Insurance is optional and is arranged at checkout.",
+  "Insurance is optional: our team can arrange cover after you book.",
 ];
 
 export const GENERAL_DOCS = [
