@@ -7,6 +7,7 @@ import { transitOf, fmtDate, money } from "../lib/quote";
 import { M3_TO_FT3, roomVolume, shippingGuide } from "../lib/units";
 import { useSurvey } from "../lib/useSurvey";
 import { DocsStep, PassStep, PaymentStep, QuoteStep } from "./FlowSteps";
+import Icon from "./Icons";
 import StepHeader from "./StepHeader";
 import SurveyStep from "./SurveyStep";
 
@@ -171,7 +172,7 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
             <div className="route-box">
               <div><div className="code">{info.fromCode}</div><div className="route-name">{info.fromName}</div></div>
               <div className="route-mid">
-                <div className="route-line"><span /><b aria-hidden="true">✈</b><span /></div>
+                <div className="route-line"><span /><b><Icon name="ship" size={20} /></b><span /></div>
                 <span className="route-days">{transit}*</span>
               </div>
               <div className="right"><div className="code">{info.toCode}</div><div className="route-name">{info.toName}</div></div>
@@ -190,7 +191,7 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
               <span>{asideTotalLabel}</span>
               <span className="total">{priceText(asideTotal)}</span>
             </div>
-            <p className="booking-note">*Transit windows are samples, to be confirmed by APAC Relocation.</p>
+            <p className="booking-note">*Port-to-port (PTP) transit time.</p>
             <div className="booking-new">
               <button type="button" className="link" onClick={onNewMove}>Start a different move</button>
             </div>
@@ -202,7 +203,7 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
         <div className="handle" aria-hidden="true" />
         <div className="between">
           <div>
-            <div className="small strong">{info.fromCode} ✈ {info.toCode} <span className="muted">· {info.dateShort} · {info.volume}</span></div>
+            <div className="small strong">{info.fromCode} <Icon name="ship" size={15} className="inline-icon" /> {info.toCode} <span className="muted">· {info.dateShort} · {info.volume}</span></div>
             <div className="bar-price">{priceText(asideTotal)}</div>
           </div>
           <span className="muted tiny right">{asideTotalLabel}</span>

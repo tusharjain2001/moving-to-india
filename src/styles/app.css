@@ -680,6 +680,8 @@ button.room:hover { box-shadow: 0 0 0 2px var(--accent); }
 .office-name { margin: 6px 0 4px; font-size: 17px; font-weight: 600; }
 .tint-box { background: var(--accent-100); border-radius: 14px; padding: 16px 20px; color: var(--accent-800); font-size: 15px; line-height: 1.55; }
 .tint-box .small { margin-top: 4px; line-height: 1.5; }
+.route-line b { display: inline-flex; }
+.inline-icon { vertical-align: -2px; color: var(--accent); }
 .price-list { margin: 0; padding: clamp(16px, 2.2vw, 26px); display: grid; gap: 12px; font-size: 15px; }
 .price-list > div { display: flex; justify-content: space-between; gap: 16px; }
 .price-list dd { margin: 0; font-weight: 600; white-space: nowrap; }

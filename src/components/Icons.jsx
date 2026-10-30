@@ -21,6 +21,7 @@ const paths = {
   download: <><path d="M12 4v12" /><path d="M6 10l6 6 6-6" /><path d="M4 20h16" /></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3.5 6.5l8.5 6.5 8.5-6.5" /></>,
   home: <><path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h12V9.5" /></>,
+  ship: <><path d="M3 13.5h18l-2.2 4.5H5.2z" /><path d="M6.5 13.5V10h11v3.5" /><path d="M10 10V7h4v3" /><path d="M3 21c1.5 0 1.5-.8 3-.8s1.5.8 3 .8 1.5-.8 3-.8 1.5.8 3 .8 1.5-.8 3-.8 1.5.8 3 .8" /></>,
 };
 
 export default function Icon({ name, size = 18, label, strokeWidth = 1.8, className = "" }) {

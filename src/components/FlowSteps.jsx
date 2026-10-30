@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import logo from "../assets/logo.png";
 import { createPaymentIntent, deepGet, loadStripe } from "../api/moversly";
 import { INDIA_IMPORT, SG_EXPORT } from "../data/content";
-import { GENERAL_DOCS, TERMS, fmtDate, money } from "../lib/quote";
+import { EXCLUSIONS, GENERAL_DOCS, TERMS, fmtDate, money } from "../lib/quote";
+import Icon from "./Icons";
 
 // Steps 3–5 of the v4 design: quotation, payment (Stripe), Move Pass, documents.
 
@@ -108,12 +109,7 @@ function PricePanel({ info }) {
 
 export function QuoteStep({ info, onBack, onNext, nextLabel, nextDisabled }) {
   const [termsOpen, setTermsOpen] = useState(false);
-  const schedule = [
-    ["Pickup", info.dateLong],
-    ["Export", "After pickup and export clearance"],
-    ["Transit", `Approx. ${info.transit}*`],
-    ["Delivery", "Appointment after arrival and customs release"],
-  ];
+  const [exclOpen, setExclOpen] = useState(false);
   return (
     <>
       <div className="step-title">
@@ -132,8 +128,8 @@ export function QuoteStep({ info, onBack, onNext, nextLabel, nextDisabled }) {
             <div className="trip-name">{info.fromName}</div>
           </div>
           <div className="trip-mid">
-            <span className="strong small">Approx. {info.transit}*</span>
-            <div className="route-line big"><span /><b aria-hidden="true">✈</b><span /></div>
+            <span className="strong small">Approx. {info.transit} port to port</span>
+            <div className="route-line big"><span /><b><Icon name="ship" size={24} /></b><span /></div>
             <span className="tiny muted">Door to door · ocean freight</span>
           </div>
           <div className="right">
@@ -141,19 +137,6 @@ export function QuoteStep({ info, onBack, onNext, nextLabel, nextDisabled }) {
             <div className="trip-code">{info.toCode}</div>
             <div className="trip-name">{info.toName}</div>
           </div>
-        </div>
-        <div className="panel-pad">
-          <h2 className="h-17">Shipment and delivery schedule</h2>
-          <ol className="schedule">
-            {schedule.map(([t, b], i) => (
-              <li key={t}>
-                <span className={`sched-n ${i === 0 ? "on" : ""}`}>{i + 1}</span>
-                <span className="strong">{t}</span>
-                <span className="small muted">{b}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="fine">*Sample transit window, to be confirmed by APAC Relocation. Exact dates depend on sailing, customs, capacity and access.</p>
         </div>
       </section>
 
@@ -180,16 +163,12 @@ export function QuoteStep({ info, onBack, onNext, nextLabel, nextDisabled }) {
 
       <PricePanel info={info} />
 
-      <div className="two-cards">
-        <div className="panel panel-pad-sm">
-          <div className="strong ok-text">✓ Included:</div>
-          <p className="small muted mt8">origin packing and pickup, export coordination, ocean freight arrangement, destination clearance coordination, local delivery and standard unpacking.</p>
-        </div>
-        <div className="panel panel-pad-sm">
-          <div className="strong warn-text">– Not included unless expressly quoted:</div>
-          <p className="small muted mt8">government duties and taxes, inspections, storage, unusual access or hoisting, parking permits, demurrage, special handling, optional insurance and other specified surcharges.</p>
-        </div>
-      </div>
+      <section className="panel">
+        <button type="button" className="terms-btn" aria-expanded={exclOpen} onClick={() => setExclOpen(!exclOpen)}>
+          Rates exclude<span aria-hidden="true">{exclOpen ? "–" : "+"}</span>
+        </button>
+        {exclOpen && <ul className="terms">{EXCLUSIONS.map((t) => <li key={t}>{t}</li>)}</ul>}
+      </section>
 
       <section className="panel">
         <button type="button" className="terms-btn" aria-expanded={termsOpen} onClick={() => setTermsOpen(!termsOpen)}>
@@ -382,7 +361,7 @@ export function PassStep({ info, onBack, onNext }) {
           <div className="pass-route">
             <div><div className="pass-small">From</div><div className="pass-code">{info.fromCode}</div><div className="pass-small mt6">{info.fromName}</div></div>
             <div className="pass-mid">
-              <div className="route-line light"><span /><b aria-hidden="true">✈</b><span /></div>
+              <div className="route-line light"><span /><b><Icon name="ship" size={22} /></b><span /></div>
               <span className="pass-small strong">{info.transit}*</span>
             </div>
             <div className="right"><div className="pass-small">To</div><div className="pass-code">{info.toCode}</div><div className="pass-small mt6">{info.toName}</div></div>
@@ -479,7 +458,7 @@ export function DocsStep({ info, onBack }) {
       <section className="sum-hero">
         <div className="sum-route">
           <div><div className="caps light">From</div><div className="sum-place">{info.fromName}</div></div>
-          <span className="sum-plane" aria-hidden="true">✈</span>
+          <span className="sum-plane"><Icon name="ship" size={28} /></span>
           <div className="right"><div className="caps light">To</div><div className="sum-place">{info.toName}</div></div>
         </div>
         <div className="sum-sub">{info.typeLabel} · moving {info.dateLong}</div>
