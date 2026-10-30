@@ -37,9 +37,16 @@ export default function RoomSheet({ room, survey, onClose }) {
     },
     [room.id, survey],
   );
+  // eslint-disable-next-line no-unused-vars -- kept for when upload is turned back on
   const openPicker = useCallback(() => {
     setCamera(false);
     fileRef.current?.click();
+  }, []);
+  // Without upload, a browser that can't record shows a message instead of the file picker.
+  const [noCamera, setNoCamera] = useState("");
+  const cameraUnsupported = useCallback(() => {
+    setCamera(false);
+    setNoCamera("This browser can't record video. Please open this page on your phone to record the room.");
   }, []);
 
   return (
@@ -64,10 +71,14 @@ export default function RoomSheet({ room, survey, onClose }) {
             <span className="choice-icon"><span className="rec-dot" /></span>
             <span><span className="choice-t">Record the room</span><span className="choice-s">Walk around slowly for 20–60 seconds</span></span>
           </button>
+          {/* Upload turned off for now: recording only. Uncomment to bring it back
+              (and use openPicker again as the camera fallback below).
           <button type="button" className="choice" onClick={openPicker}>
             <span className="choice-icon soft"><Icon name="upload" size={22} strokeWidth={2} /></span>
             <span><span className="choice-t">Upload a video</span><span className="choice-s">From your gallery or files</span></span>
           </button>
+          */}
+          {noCamera && <p className="rp-alert" role="alert">{noCamera}</p>}
           <div className="tips">
             <div className="caps">For the best result</div>
             <ul>{TIPS.map((t) => <li key={t}>{t}</li>)}</ul>
@@ -132,7 +143,7 @@ export default function RoomSheet({ room, survey, onClose }) {
           e.target.value = "";
         }}
       />
-      {camera && <CameraRecorder roomName={room.name} onDone={onVideo} onCancel={() => setCamera(false)} onUnsupported={openPicker} />}
+      {camera && <CameraRecorder roomName={room.name} onDone={onVideo} onCancel={() => setCamera(false)} onUnsupported={cameraUnsupported} />}
     </section>
   );
 }

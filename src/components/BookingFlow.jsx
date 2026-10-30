@@ -25,7 +25,8 @@ const PREV = {
  * Steps 2–5 of the booking flow (Claude Design "India Booking Flow v4"), connected like
  * the Malaysia project: opening the quotation sends the survey items to the order,
  * looks up the price in the sales sheet and saves it on the order; payment is a real
- * Stripe payment through the Moversly payment-intent API. Without a sheet price
+ * Stripe payment through the Moversly payment-intent API, opened by our server with the
+ * sheet price (the browser never sends the amount). Without a sheet price
  * (city without a tab, Malaysia origin, very large move) the customer sends a quote request.
  */
 export default function BookingFlow({ step, move, update, go, onNewMove }) {
@@ -43,6 +44,7 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
   const scanned = rooms.filter((r) => r.status === "done").length;
   const transit = transitOf(v.toChoice);
   const fromSG = v.fromChoice !== "Malaysia";
+  const priceCity = city ? city.name : placeCity(v.dest);
 
   // The quote belongs to this route and inventory; any edit in the survey gets a new one.
   const items = rooms.flatMap((r) => r.items.map((it) => ({ name: it.label, room: r.name, dims: it.dims, qty: it.qty })));
@@ -57,7 +59,7 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
     (async () => {
       try {
         const meta = await updateOrderWithItems({ orderId: move.orderId, values: v, items });
-        const result = await getSheetPrice({ origin: v.fromChoice, city: city ? city.name : placeCity(v.dest), volumeM3: total });
+        const result = await getSheetPrice({ origin: v.fromChoice, city: priceCity, volumeM3: total });
         const saved = {
           sig,
           ...result,
@@ -89,6 +91,13 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
     savePricingSplit(move.orderId, next).catch((e) => console.warn("create-pricing-with-split failed:", e));
   };
 
+  // The sheet price changed between the quotation and payment: keep the chosen option at its new price.
+  // (Our server saves the new price on the order when it opens the payment.)
+  const priceChanged = (fresh) => {
+    const chosen = fresh.options?.find((o) => o.type === quote.type);
+    update({ ...move, quote: chosen ? { ...quote, ...fresh, ...chosen } : { ...quote, ...fresh } });
+  };
+
   const info = {
     v,
     booking,
@@ -101,6 +110,9 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
     price,
     pricing,
     choose,
+    priceChanged,
+    priceCity,
+    priceOrigin: v.fromChoice,
     retry: () => setAttempt((a) => a + 1),
     transit,
     fromSG,

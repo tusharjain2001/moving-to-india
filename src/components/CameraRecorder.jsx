@@ -48,7 +48,7 @@ export default function CameraRecorder({ roomName, onDone, onCancel, onUnsupport
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
       })
-      .catch(() => setError("Camera access was blocked. Allow camera access, or upload a video instead."));
+      .catch(() => setError("Camera access was blocked. Allow camera access in your browser settings and try again."));
     return () => {
       cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());

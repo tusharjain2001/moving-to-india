@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import logo from "../assets/logo.png";
-import { createPaymentIntent, deepGet, loadStripe } from "../api/moversly";
+import { loadStripe } from "../api/moversly";
+import { openPayment } from "../api/pricing";
 import { INDIA_IMPORT, SG_EXPORT } from "../data/content";
 import { EXCLUSIONS, GENERAL_DOCS, TERMS, fmtDate, money } from "../lib/quote";
 import Icon from "./Icons";
@@ -183,15 +184,16 @@ export function QuoteStep({ info, onBack, onNext, nextLabel, nextDisabled }) {
 }
 
 /* ── Step 4: payment (Stripe, as in the Malaysia project) ── */
-// payment-intent on api.moversly.com returns a Stripe clientSecret; card and
-// PayNow are completed in-page with Stripe's Payment Element. One payment intent
-// per order and amount: opening the payment page again reuses it, so Stripe
-// doesn't collect a new unfinished payment on every visit.
+// Our server (/payment) sets the amount from the sales sheet and opens the payment on
+// api.moversly.com (payment-intent), returning a Stripe client secret; card and PayNow
+// are completed in-page with Stripe's Payment Element. One payment per order, option and
+// price: opening the payment page again reuses it, so Stripe doesn't collect a new
+// unfinished payment on every visit.
 const intents = new Map();
-function paymentIntentFor({ orderId, email, name, amount }) {
-  const key = `${orderId}:${amount}`;
+function paymentFor({ orderId, quote, city, origin, email, name }) {
+  const key = `${orderId}:${quote.type}:${quote.price}`;
   if (!intents.has(key)) {
-    intents.set(key, createPaymentIntent({ orderId, email, name, amount }).catch((e) => {
+    intents.set(key, openPayment({ orderId, quote, city, origin, email, name }).catch((e) => {
       intents.delete(key);
       throw e;
     }));
@@ -199,8 +201,9 @@ function paymentIntentFor({ orderId, email, name, amount }) {
   return intents.get(key);
 }
 
-function useStripePayment({ orderId, email, name, amount, onPaid }) {
-  const [state, setState] = useState({ ready: false, error: "", processing: false });
+function useStripePayment({ orderId, email, name, quote, city, origin, onPaid, onPriceChanged }) {
+  const amount = quote?.price ?? null;
+  const [state, setState] = useState({ ready: false, error: "", notice: "", processing: false });
   const stripeRef = useRef(null);
   const elementsRef = useRef(null);
   const mountRef = useRef(null);
@@ -219,8 +222,20 @@ function useStripePayment({ orderId, email, name, amount, onPaid }) {
     (async () => {
       try {
         const stripe = await loadStripe(); // first, so no payment is opened if Stripe can't load
-        const res = await paymentIntentFor({ orderId, email, name, amount });
-        const secret = deepGet(res, ["clientSecret", "client_secret"]);
+        let res;
+        try {
+          res = await paymentFor({ orderId, quote, city, origin, email, name });
+        } catch (e) {
+          // The sheet changed since the quotation: show the new price; this effect runs again for it.
+          if (e.code === "price_changed" && e.quote && alive) {
+            setState((s) => ({ ...s, notice: `Your price was updated to ${money(e.price)}. Please check it before paying.` }));
+            onPriceChanged(e.quote);
+            return;
+          }
+          if (e.code === "no_price") throw new Error("This price is no longer available online. Go back to the quotation to see your options.");
+          throw e;
+        }
+        const secret = res?.client_secret;
         if (!secret) throw new Error("The server didn't return a payment session. Please try again.");
         if (!alive) return;
         stripeRef.current = stripe;
@@ -236,9 +251,9 @@ function useStripePayment({ orderId, email, name, amount, onPaid }) {
       alive = false;
       element?.destroy();
     };
-    // One payment session per order and amount.
+    // One payment session per order, option and amount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, amount]);
+  }, [orderId, quote?.type, amount]);
 
   const pay = async () => {
     if (state.processing || !stripeRef.current || !elementsRef.current) return;
@@ -261,7 +276,16 @@ function useStripePayment({ orderId, email, name, amount, onPaid }) {
 }
 
 export function PaymentStep({ info, agreed, setAgreed, onPaid, onBack, onEdit }) {
-  const stripe = useStripePayment({ orderId: info.orderId, email: info.v.email, name: info.v.name, amount: info.price, onPaid });
+  const stripe = useStripePayment({
+    orderId: info.orderId,
+    email: info.v.email,
+    name: info.v.name,
+    quote: info.price != null ? info.quote : null,
+    city: info.priceCity,
+    origin: info.priceOrigin,
+    onPaid,
+    onPriceChanged: info.priceChanged,
+  });
   const initials = info.v.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
   const agreements = [
     ["reviewed", "I have reviewed the quotation scope, exclusions, schedule estimates, cancellation terms and APAC Relocation contractual responsibility."],
@@ -321,6 +345,7 @@ export function PaymentStep({ info, agreed, setAgreed, onPaid, onBack, onEdit })
       </section>
 
       <section className="panel panel-pad-sm">
+        {stripe.notice && <p className="tint-box" role="status" style={{ marginBottom: 14 }}>{stripe.notice}</p>}
         {!stripe.ready && !stripe.error && <p className="small muted">Loading secure payment…</p>}
         <div ref={stripe.mountRef} />
         {stripe.error && <p className="rp-alert mt14" role="alert">{stripe.error}</p>}

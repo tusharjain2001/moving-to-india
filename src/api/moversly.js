@@ -5,11 +5,11 @@
 //   3. update the same order with the AI survey items and volume
 //   4. save the price on the order (create-pricing-with-split); the price comes
 //      from the sales team's sheet (src/api/pricing.js), not the pricing API
-//   5. payment intent (Stripe clientSecret), paid in-page with Stripe's Payment Element
+//   5. payment intent (Stripe clientSecret), opened by our server with the sheet price
+//      (POST /payment, see src/api/pricing.js), paid in-page with Stripe's Payment Element
 //   6. read the order back
 
 const BASE = "https://api.moversly.com";
-const CURRENCY = "SGD";
 const M3_TO_FT3 = 35.3147;
 const FALLBACK_KG_PER_M3 = 110; // the AI survey gives no weights; same estimate as the Malaysia project
 
@@ -171,13 +171,8 @@ export function savePricingSplit(orderId, quote) {
   });
 }
 
-// Step 5: payment intent. Money.amount is a string per the API schema.
-export function createPaymentIntent({ orderId, email, name, amount, currency = CURRENCY }) {
-  return req("/api/v1/order/survey-app/payment-intent", {
-    method: "POST",
-    body: { orderId, email, name, amount: { currency, amount: String(amount) } },
-  });
-}
+// Step 5, the payment intent, is opened by our server (src/api/pricing.js openPayment),
+// so the amount comes from the sales sheet, not from the browser.
 
 // Step 6: the full order.
 export function getOrder(orderId) {
