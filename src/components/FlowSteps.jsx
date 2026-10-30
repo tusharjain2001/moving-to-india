@@ -25,6 +25,14 @@ const SHIP_TEXT = {
   "40' FCL": ["Your own 40-foot container (40' FCL)", "The container is only for your goods and ships as soon as it is packed."],
 };
 
+// The price split from the sales sheet (origin, freight, destination and margin rows).
+const BREAKDOWN = [
+  ["origin", "Origin charges", "Packing, pickup and transport to the port"],
+  ["freight", "Freight charges", "Sea freight to"],
+  ["destination", "Destination charges", "Customs clearance, delivery to your home and GST"],
+  ["margin", "Margin", ""],
+];
+
 /* ── Step 3: quotation ─────────────────────────────────── */
 function PricePanel({ info }) {
   const { quote, price, pricing } = info;
@@ -48,12 +56,13 @@ function PricePanel({ info }) {
       </section>
     );
   const options = quote.options || [];
+  const breakdown = price != null ? quote.breakdown : null;
   return (
     <section className="panel">
       <dl className="price-list">
         <div><dt>Confirmed inventory volume (customer-edited)</dt><dd>{info.volume} · {quote.cft} CFT</dd></div>
         {price != null && <div><dt>Rate band</dt><dd>{quote.type} · {quote.band}</dd></div>}
-        {price != null && <div><dt>Door-to-door moving services</dt><dd>{money(price)}</dd></div>}
+        {price != null && !breakdown && <div><dt>Door-to-door moving services</dt><dd>{money(price)}</dd></div>}
       </dl>
       {options.length > 1 && (
         <fieldset className="ship-opts">
@@ -72,6 +81,19 @@ function PricePanel({ info }) {
             );
           })}
         </fieldset>
+      )}
+      {breakdown && (
+        <dl className="price-list breakdown">
+          {BREAKDOWN.map(([key, title, sub]) => (
+            <div key={key}>
+              <dt>
+                {title}
+                {sub && <span className="small muted block">{key === "freight" ? `${sub} ${quote.port || "India"}` : sub}</span>}
+              </dt>
+              <dd>{money(breakdown[key] || 0)}</dd>
+            </div>
+          ))}
+        </dl>
       )}
       {price != null ? (
         <div className="price-total">

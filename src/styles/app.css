@@ -685,6 +685,9 @@ button.room:hover { box-shadow: 0 0 0 2px var(--accent); }
 .price-list dd { margin: 0; font-weight: 600; white-space: nowrap; }
 .price-list .soft { color: var(--n-700); font-size: 14px; }
 .price-list .soft dd { font-weight: 400; }
+.price-list.breakdown { border-top: 1px solid rgba(32, 30, 29, 0.08); }
+.price-list.breakdown dt .block { display: block; margin-top: 2px; line-height: 1.45; }
+.ship-opts + .price-list.breakdown { border-top: 0; padding-top: 4px; }
 .ship-opts { margin: 0; border: 0; padding: 0 clamp(16px, 2.2vw, 26px) clamp(16px, 2.2vw, 26px); display: grid; gap: 10px; }
 .ship-opts legend { padding: 0; margin-bottom: 10px; font-size: 15px; }
 .ship-opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; box-shadow: 0 0 0 1px rgba(32, 30, 29, 0.12); font-size: 15px; cursor: pointer; }
