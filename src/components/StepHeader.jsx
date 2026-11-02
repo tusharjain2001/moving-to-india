@@ -7,8 +7,8 @@ export const STEPS = ["Your move", "AI survey", "Quotation", "Payment", "Documen
  * Booking-flow header from the v4 design: logo and "Talk to AI", then a back
  * button and the 5-step stepper joined by lines. Phones get "Step 2 of 5" and bars.
  */
-export default function StepHeader({ step, onBack, backLabel, right, onStep, canOpen = () => false }) {
-  const next = step < STEPS.length - 1 ? `Next: ${STEPS[step + 1]}` : "Final step";
+export default function StepHeader({ steps = STEPS, step, onBack, backLabel, right, onStep, canOpen = () => false }) {
+  const next = step < steps.length - 1 ? `Next: ${steps[step + 1]}` : "Final step";
   return (
     <header className="fh">
       <div className="fh-phone only-phone">
@@ -23,11 +23,11 @@ export default function StepHeader({ step, onBack, backLabel, right, onStep, can
           <a href="#/chat" className="fh-icon tint" aria-label="Talk to AI"><Icon name="sparkle" size={18} /></a>
         </div>
         <div className="fh-phone-text">
-          <span><span className="muted">Step {step + 1} of 5 · </span><strong>{STEPS[step]}</strong></span>
+          <span><span className="muted">Step {step + 1} of 5 · </span><strong>{steps[step]}</strong></span>
           <span className="muted">{next}</span>
         </div>
         <div className="fh-bars" aria-hidden="true">
-          {STEPS.map((s, i) => <span key={s} className={i <= step ? "on" : ""} />)}
+          {steps.map((s, i) => <span key={s} className={i <= step ? "on" : ""} />)}
         </div>
       </div>
 
@@ -48,7 +48,7 @@ export default function StepHeader({ step, onBack, backLabel, right, onStep, can
               </button>
             )}
             <ol className="fh-steps">
-              {STEPS.map((label, i) => (
+              {steps.map((label, i) => (
                 <li key={label} className={i < step ? "done" : i === step ? "current" : ""} aria-current={i === step ? "step" : undefined}>
                   {onStep && canOpen(i) ? (
                     <button type="button" className="fh-step link-step" onClick={() => onStep(i)}>
@@ -61,7 +61,7 @@ export default function StepHeader({ step, onBack, backLabel, right, onStep, can
                       {label}
                     </span>
                   )}
-                  {i < STEPS.length - 1 && <span className="fh-line" />}
+                  {i < steps.length - 1 && <span className="fh-line" />}
                 </li>
               ))}
             </ol>

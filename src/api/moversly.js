@@ -123,19 +123,23 @@ export function resendConfirmationCode(email) {
 
 // Step 3: the same order with items + volume. The backend parses dimensions as
 // "L x W x H" (lowercase x, numbers only), so they are sent in cm without a unit.
-// items: [{ name, room, dims: [m, m, m], qty }]. Returns the resolved ports and container.
+// items: [{ name, room, dims: [m, m, m], qty, volM3?, weightKg? }] (boxes carry their
+// volume and the weight the customer typed; survey items get both from their size).
+// Returns the resolved ports and container.
 export function updateOrderWithItems({ orderId, values, items }) {
   const roomNames = [...new Set(items.map((it) => it.room).filter(Boolean))];
-  const unitM3 = (it) => it.dims[0] * it.dims[1] * it.dims[2];
+  const unitM3 = (it) => it.volM3 ?? it.dims[0] * it.dims[1] * it.dims[2];
+  const unitKg = (it) => (it.weightKg > 0 ? Number(it.weightKg) : unitM3(it) * FALLBACK_KG_PER_M3);
   const apiItems = items.map((it) => ({
     name: it.name,
     dimensions: it.dims.map((m) => Math.round(m * 100)).join(" x "),
     quantity: String(it.qty),
     volumeFt3: (unitM3(it) * M3_TO_FT3).toFixed(2),
     volumeM3: unitM3(it).toFixed(2),
-    weightKg: String(Math.round(unitM3(it) * FALLBACK_KG_PER_M3)),
+    weightKg: String(Math.round(unitKg(it))),
   }));
   const totalM3 = items.reduce((s, it) => s + unitM3(it) * it.qty, 0);
+  const totalKg = items.reduce((s, it) => s + unitKg(it) * it.qty, 0);
   return req("/api/v1/order/create-order-for-pricing", {
     method: "POST",
     body: {
@@ -146,7 +150,7 @@ export function updateOrderWithItems({ orderId, values, items }) {
       items: apiItems,
       total_volume: Math.round(totalM3),
       total_volume_ft3: Math.round(totalM3 * M3_TO_FT3),
-      total_weight: Math.round(totalM3 * FALLBACK_KG_PER_M3),
+      total_weight: Math.round(totalKg),
       recommended_container: "",
     },
   });

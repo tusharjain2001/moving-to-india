@@ -170,7 +170,7 @@ export default function MoveForm({ values, setValues, onSubmitted }) {
             4.9★ rating* · 1,000+ moves a year · Own office in India
           </p>
           <button type="submit" className="pill-cta" disabled={submitting}>
-            {submitting ? "Creating your move plan…" : "Next: scan your rooms"} <span aria-hidden="true">→</span>
+            {submitting ? "Creating your move plan…" : values.size === "Few Boxes" ? "Next: add your boxes" : "Next: scan your rooms"} <span aria-hidden="true">→</span>
           </button>
         </div>
       </form>

@@ -698,6 +698,24 @@ button.room:hover { box-shadow: 0 0 0 2px var(--accent); }
 .ship-opt input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .ship-opt .block { display: block; margin-top: 2px; line-height: 1.45; }
 .ship-opt .nowrap { white-space: nowrap; }
+/* "A few boxes": box builder instead of the AI survey */
+.box-builder { padding: clamp(16px, 2.2vw, 26px); display: grid; gap: 18px; }
+.box-sizes { margin: 0; border: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.box-size { position: relative; display: grid; gap: 2px; padding: 14px; border-radius: 14px; box-shadow: 0 0 0 1px rgba(32, 30, 29, 0.12); font-size: 15px; cursor: pointer; }
+.box-size:hover { box-shadow: 0 0 0 2px var(--accent); }
+.box-size.on { background: var(--accent-100); box-shadow: 0 0 0 2px var(--accent); }
+.box-size input { position: absolute; opacity: 0; pointer-events: none; }
+.box-fields { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; align-items: end; }
+.box-add { white-space: nowrap; }
+@media (max-width: 640px) {
+  .box-sizes { grid-template-columns: 1fr; }
+  .box-fields { grid-template-columns: 1fr 1fr; }
+  .box-contents, .box-add { grid-column: 1 / -1; }
+}
+.box-list li { display: flex; align-items: center; gap: 14px; padding: 14px clamp(16px, 2.2vw, 26px); border-bottom: 1px solid var(--n-200); }
+.box-list li:last-child { border-bottom: 0; }
+.box-list .block { display: block; margin-top: 2px; }
+.box-tag { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-100); color: var(--accent-700); font-weight: 700; font-size: 14px; }
 .price-total { background: var(--accent-100); padding: clamp(16px, 2.2vw, 26px); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px; font-size: 15px; font-weight: 600; }
 .big-money { font-size: clamp(26px, 2.4vw, 32px); font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: var(--accent); }
 .terms-btn { width: 100%; min-height: 56px; padding: 0 20px; border: 0; background: none; display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: 600; text-align: left; }

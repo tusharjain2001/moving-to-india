@@ -5,10 +5,12 @@ import { getSheetPrice } from "../api/pricing";
 import { placeCity, placeCode } from "../lib/move";
 import { transitOf, fmtDate, money } from "../lib/quote";
 import { M3_TO_FT3, roomVolume, shippingGuide } from "../lib/units";
+import { boxItems, boxVolume } from "../lib/boxes";
 import { useSurvey } from "../lib/useSurvey";
+import BoxStep from "./BoxStep";
 import { DocsStep, PassStep, PaymentStep, QuoteStep } from "./FlowSteps";
 import Icon from "./Icons";
-import StepHeader from "./StepHeader";
+import StepHeader, { STEPS } from "./StepHeader";
 import SurveyStep from "./SurveyStep";
 
 const SIZE_LABEL = { "Full Household": "Full household", "Partial Household": "Partial household", "Few Boxes": "A few boxes" };
@@ -39,15 +41,25 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
   const v = move.values;
   const booking = move.booking || null;
   const city = cityByName(v.toChoice);
-  const total = rooms.reduce((s, r) => s + roomVolume(r), 0);
-  const itemCount = rooms.reduce((s, r) => s + r.items.reduce((n, it) => n + it.qty, 0), 0);
+  // "A few boxes": the customer adds boxes instead of doing the AI survey (as on the Malaysia page).
+  const useBoxes = v.size === "Few Boxes";
+  const boxes = move.boxes || [];
+  const setBoxes = (next) => update({ ...move, boxes: next });
+  const total = useBoxes
+    ? boxes.reduce((s, b) => s + boxVolume(b.size) * b.qty, 0)
+    : rooms.reduce((s, r) => s + roomVolume(r), 0);
+  const itemCount = useBoxes
+    ? boxes.reduce((n, b) => n + b.qty, 0)
+    : rooms.reduce((s, r) => s + r.items.reduce((n, it) => n + it.qty, 0), 0);
   const scanned = rooms.filter((r) => r.status === "done").length;
   const transit = transitOf(v.toChoice);
   const fromSG = v.fromChoice !== "Malaysia";
   const priceCity = city ? city.name : placeCity(v.dest);
 
   // The quote belongs to this route and inventory; any edit in the survey gets a new one.
-  const items = rooms.flatMap((r) => r.items.map((it) => ({ name: it.label, room: r.name, dims: it.dims, qty: it.qty })));
+  const items = useBoxes
+    ? boxItems(boxes)
+    : rooms.flatMap((r) => r.items.map((it) => ({ name: it.label, room: r.name, dims: it.dims, qty: it.qty })));
   const sig = JSON.stringify([v.origin, v.dest, items.map((it) => [it.name, it.dims.map((d) => d.toFixed(2)), it.qty])]);
   const quote = move.quote?.sig === sig ? move.quote : null;
   const price = quote?.price ?? null;
@@ -137,7 +149,9 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
   const requestQuote = () => book({ requested: true, total: null });
 
   const idx = STEP_INDEX[step];
-  const [prevRoute, prevLabel] = PREV[step];
+  const [prevRoute, surveyBackLabel] = PREV[step];
+  const prevLabel = useBoxes && step === "quote" ? "Back to your boxes" : surveyBackLabel;
+  const steps = useBoxes ? STEPS.map((s, i) => (i === 1 ? "Your boxes" : s)) : STEPS;
   const goStep = (i) => {
     const target = [null, "survey", "quote", booking ? "pass" : "payment", booking ? "documents" : null][i];
     if (i === 0) go("home");
@@ -146,7 +160,7 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
 
   const quoteReady = !!quote && !pricing.loading;
   const cta = {
-    survey: { label: "Next: quotation", action: () => go("quote") },
+    survey: { label: "Next: quotation", action: () => go("quote"), disabled: useBoxes && boxes.length === 0 },
     quote:
       quoteReady && price == null
         ? { label: "Send my quote request", action: requestQuote }
@@ -162,11 +176,12 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
 
   return (
     <div className="flow">
-      <StepHeader step={idx} onBack={() => go(prevRoute)} backLabel={prevLabel} onStep={goStep} canOpen={(i) => i < idx || (i === 4 && !!booking)} />
+      <StepHeader steps={steps} step={idx} onBack={() => go(prevRoute)} backLabel={prevLabel} onStep={goStep} canOpen={(i) => i < idx || (i === 4 && !!booking)} />
 
       <div className={`flow-body ${step === "pass" ? "wide" : ""}`}>
         <main className="flow-main">
-          {step === "survey" && <SurveyStep survey={survey} info={info} onBack={() => go("home")} onNext={() => go("quote")} />}
+          {step === "survey" && useBoxes && <BoxStep boxes={boxes} setBoxes={setBoxes} info={info} onBack={() => go("home")} onNext={() => go("quote")} />}
+          {step === "survey" && !useBoxes && <SurveyStep survey={survey} info={info} onBack={() => go("home")} onNext={() => go("quote")} />}
           {step === "quote" && <QuoteStep info={info} onBack={() => go("survey")} onNext={cta.action} nextLabel={cta.label} nextDisabled={cta.disabled} />}
           {step === "payment" && (
             <PaymentStep info={info} agreed={agreed} setAgreed={setAgreed} onPaid={onPaid} onBack={() => go("quote")} onEdit={() => go("home")} />
