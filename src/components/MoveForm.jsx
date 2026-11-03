@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MOVE_SIZES, createOrderForPricing, deepGet, loadGoogleMaps } from "../api/moversly";
 import { destFields, originFields, routeProblem } from "../lib/places";
+import { track } from "../lib/track";
 
 const SIZE_LABEL = { "Full Household": "Full household", "Partial Household": "Partial", "Few Boxes": "A few boxes" };
 const FLOW = ["Your move", "AI survey", "Quotation", "Payment", "Documents"];
@@ -103,6 +104,7 @@ export default function MoveForm({ values, setValues, onSubmitted }) {
       const orderId = deepGet(res, ["order_id", "orderId", "orderID"]);
       if (!orderId) throw new Error("We couldn't create your booking. Please try again.");
       const exists = deepGet(res, ["user_exist", "userExist", "user_exists"]);
+      track("lead_submitted", { lead_source: "form", to_city: final.toChoice || final.dest });
       onSubmitted(final, orderId, exists === true || exists === "true");
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
@@ -113,7 +115,7 @@ export default function MoveForm({ values, setValues, onSubmitted }) {
   return (
     <div id="start" className="plan-card">
       <div className="plan-head">
-        <h2>Start your move plan</h2>
+        <h2>Get your instant moving quote &amp; book online</h2>
         <span>Step 1 of 5</span>
       </div>
       <div className="plan-bars" aria-hidden="true">

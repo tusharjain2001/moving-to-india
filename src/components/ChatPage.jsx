@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { askAssistant } from "../api/assistant";
+import { askAssistant, understandAnswer } from "../api/assistant";
 import { createOrderForPricing, deepGet } from "../api/moversly";
 import logo from "../assets/logo.png";
-import { GREETING, MOVE_TYPES, NO_ANSWER, fromLabel, label, longDate, moveContext, question, startState, toFormValues, turn } from "../lib/chat";
+import { track } from "../lib/track";
+import {
+  GREETING, MOVE_TYPES, NO_ANSWER, UNDERSTAND, fromLabel, label, longDate, moveContext, question, startState, toFormValues, turn, understood,
+} from "../lib/chat";
 import Icon from "./Icons";
 
 const KEY = "moving-to-india:chat";
@@ -66,16 +69,27 @@ export default function ChatPage({ onBack, onSubmitted }) {
     setDraft("");
     setError("");
     setBusy(true);
-    const [next, replies, needsAI] = turn(state, text, value);
-    const finish = (texts) => {
-      const [q] = question(next.step, next.answers);
+    const [next, replies, needsAI, unclear] = turn(state, text, value);
+    // guess: the step the AI just read, so the visitor can change it in one tap.
+    const finish = (texts, nextState = next, guess = null) => {
+      const [q] = question(nextState.step, nextState.answers);
       const all = texts.at(-1) === q ? texts : [...texts, q];
-      setChat((c) => ({ ...c, state: next, messages: [...c.messages, ...all.map((t) => ({ role: "assistant", text: t }))] }));
+      setChat((c) => ({ ...c, state: nextState, guess, messages: [...c.messages, ...all.map((t) => ({ role: "assistant", text: t }))] }));
       setBusy(false);
       inputRef.current?.focus();
     };
     if (needsAI) askAssistant(chat.id, history, moveContext(state.answers)).then((answer) => finish([answer || NO_ANSWER]));
-    else timer.current = setTimeout(() => finish(replies), TYPING_MS);
+    else if (unclear) {
+      // Our rules couldn't read it ("few furnitures"): the AI rewrites it as a value our rules
+      // accept, and turn() checks it again. Unsure or no AI: the hint asks them to tap an option.
+      const step = state.step;
+      understandAnswer(chat.id, question(step, state.answers)[0], text, UNDERSTAND[step]).then((answer) => {
+        const [read, readReplies, readAI] = answer ? turn(state, answer) : [];
+        const got = read && !readReplies.length && !readAI ? understood(step, read.answers) : null;
+        if (got) finish([got[0]], read, got[1]);
+        else finish(replies);
+      });
+    } else timer.current = setTimeout(() => finish(replies), TYPING_MS);
   };
 
   const restart = () => {
@@ -95,6 +109,7 @@ export default function ChatPage({ onBack, onSubmitted }) {
       const orderId = deepGet(res, ["order_id", "orderId", "orderID"]);
       if (!orderId) throw new Error("We couldn't create your booking. Please try again.");
       const exists = deepGet(res, ["user_exist", "userExist", "user_exists"]);
+      track("lead_submitted", { lead_source: "chat", to_city: values.toChoice || values.dest });
       onSubmitted(values, orderId, exists === true || exists === "true");
     } catch (e) {
       setError(e.message || "Something went wrong. Please try again.");
@@ -152,6 +167,11 @@ export default function ChatPage({ onBack, onSubmitted }) {
       <footer className="cp-foot">
         <div className="cp-foot-in">
           {error && <p className="plan-error" role="alert">{error}</p>}
+          {!busy && chat.guess && (
+            <button type="button" className="cp-change" onClick={() => send("", `edit:${chat.guess}`)}>
+              Not right? Change it
+            </button>
+          )}
           {!busy && widget.type === "chips" && (
             <div className="cp-chips">
               {widget.options.map((o) => (

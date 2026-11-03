@@ -134,11 +134,14 @@ export function useSurvey() {
     setRooms((rs) => rs.map((r) => (r.id === roomId ? { ...r, items: r.items.filter((it) => it.id !== itemId) } : r)));
   }, []);
 
+  // Adding an item to a room that wasn't recorded makes it a room the customer filled in themselves.
   const addItem = useCallback((roomId, c) => {
     const item = { id: uid(), key: c.key, label: c.label, dims: c.typical, qty: 1, confidence: "manual", notes: [] };
     setRooms((rs) =>
       rs.map((r) =>
-        r.id === roomId ? { ...r, status: r.status === "empty" ? "done" : r.status, items: [...r.items, item] } : r,
+        r.id === roomId
+          ? { ...r, status: "done", manual: r.status === "done" ? r.manual : true, error: undefined, items: [...r.items, item] }
+          : r,
       ),
     );
   }, []);
@@ -160,6 +163,7 @@ export function useSurvey() {
         jobId: undefined,
         calibration: undefined,
         stats: undefined,
+        manual: undefined,
       }),
     [patch],
   );

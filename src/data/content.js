@@ -35,14 +35,37 @@ export const STATS = [
   ["2012", "established"],
   ["3", "own offices"],
   ["0", "hidden charges"],
-  ["48 h", "written quote"],
+  ["Real-time", "pricing"],
+];
+
+// From the client's landing page reference (Nov 2026).
+export const CONTACT = {
+  email: "contact@apacrelocation.com",
+  whatsapp: "+65 8043 4017",
+  phone: "+65 6520 1914",
+};
+export const HERO_BENEFITS = [
+  ["camera", "AI room survey"],
+  ["bolt", "Instant pricing"],
+  ["calendar", "Online booking"],
+];
+export const STEPS_4 = [
+  ["laptop", "Tell us about your move", "From, to, date and size. Under a minute."],
+  ["camera", "AI room survey", "Scan your rooms with your phone, or add your items yourself."],
+  ["card", "Get your price & book", "See your door-to-door price and pay securely online."],
+  ["truck", "We handle the rest", "Packing, shipping, customs and delivery in India."],
+];
+export const WHY_US = [
+  "End-to-end international moving service",
+  "Own offices and operations in India",
+  "Trusted by 1,000+ customers every year",
 ];
 
 export const HOW_STEPS = [
   ["01", "Your move", "Tell us where from, where to, when and roughly how much. Under a minute."],
   ["02", "AI survey", "Record a short video of each room. The AI lists every item with L × D × H and m³."],
   ["03", "Quotation", "See a door-to-door price for your inventory, then a written quote within 48 hours."],
-  ["04", "Payment", "Review the scope, add optional insurance at 3% of declared value, confirm and get your Move Pass."],
+  ["04", "Payment", "Review the scope and exclusions, pay securely by card or PayNow, and get your Move Pass."],
   ["05", "Documents", "Get the customs checklist for leaving Singapore or Malaysia and arriving in India."],
 ];
 

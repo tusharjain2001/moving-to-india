@@ -22,6 +22,12 @@ const paths = {
   mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3.5 6.5l8.5 6.5 8.5-6.5" /></>,
   home: <><path d="M4 11l8-7 8 7" /><path d="M6 9.5V20h12V9.5" /></>,
   ship: <><path d="M3 13.5h18l-2.2 4.5H5.2z" /><path d="M6.5 13.5V10h11v3.5" /><path d="M10 10V7h4v3" /><path d="M3 21c1.5 0 1.5-.8 3-.8s1.5.8 3 .8 1.5-.8 3-.8 1.5.8 3 .8 1.5-.8 3-.8 1.5.8 3 .8" /></>,
+  bolt: <path d="M13 2.5L4.5 13.5H12l-1 8 8.5-11H12z" />,
+  calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17" /><path d="M8 3v4M16 3v4" /><path d="M8.5 14.5l2 2 4-4" /></>,
+  card: <><rect x="2.5" y="5" width="19" height="14" rx="2" /><path d="M2.5 9.5h19" /><path d="M6.5 15h4" /></>,
+  truck: <><path d="M2.5 6.5h11v10h-11z" /><path d="M13.5 10h4l3 3.5v3h-7" /><circle cx="6.5" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></>,
+  laptop: <><rect x="4.5" y="5" width="15" height="10" rx="1.5" /><path d="M2.5 18.5h19" /></>,
+  chat: <path d="M20.5 11.5a8.5 8.5 0 01-12.6 7.4L3.5 20.5l1.6-4.2A8.5 8.5 0 1120.5 11.5z" />,
 };
 
 export default function Icon({ name, size = 18, label, strokeWidth = 1.8, className = "" }) {

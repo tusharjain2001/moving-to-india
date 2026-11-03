@@ -5,6 +5,29 @@
 // answer is null when the AI can't reply (daily limit, or an error).
 import { SURVEY_API_URL } from "./survey";
 
+// An answer our own rules couldn't read ("few furnitures"), rewritten by the AI as one
+// value our rules accept: a choice code, a city name or a date.
+//   POST /chat/understand { site, chat_id, question, text, kind, choices?, country? } -> { answer }
+// answer is null when the AI is unsure, over its limits, or fails.
+export async function understandAnswer(chatId, question, text, spec) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(`${SURVEY_API_URL}/chat/understand`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: "india", chat_id: chatId, question: question.slice(0, 200), text: text.slice(0, 300), ...spec }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) return null;
+    return (await res.json()).answer || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function askAssistant(chatId, messages, context) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000);

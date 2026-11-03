@@ -92,7 +92,7 @@ City card photos (`src/assets/cities/*.webp`) are from Unsplash, free to use und
 
 ## Notes
 
-- `TEST_LEAD = true` in `src/api/moversly.js`, as in the Malaysia project. Set it to false when the backend team says testing is done.
+- No `test_lead` field is sent with orders (the backend team asked to remove it, Nov 2026), so every order is a real lead and is kept.
 - The destination must be a city in India (the backend rejects a country-only destination).
 - Prices need the Moversly server with `GOOGLE_SERVICE_ACCOUNT_FILE` and `PRICE_SHEETS` set; until then the
   quotation shows "Prices are not available right now".

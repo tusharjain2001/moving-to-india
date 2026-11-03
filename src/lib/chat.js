@@ -138,14 +138,20 @@ function parse(step, text, a) {
     return looksLikePlace(city) ? [`${title(city)}, India`, null] : [null, null];
   }
   if (step === "move_type") {
-    if (/\b(box|boxes|suitcase|suitcases|bags?)\b/i.test(t)) return ["boxes", null];
-    if (/\b(partial|part|some|few items|a few things|only)\b/i.test(t)) return ["partial", null];
-    if (/\b(full|whole|entire|everything|all|house|home|apartment|flat|bhk|bedroom|condo|hdb)\b/i.test(t)) return ["full", null];
+    // Furniture or other items first: "a few boxes and a sofa" is part of a home, not only boxes.
+    const things = /\b(furnitures?|furniture's|items?|things|stuff|pieces?|belongings|sofas?|couch|beds?|mattress|tables?|chairs?|wardrobes?|cupboards?|fridge|tv|desk|cabinets?|appliances?|washing machine)\b/i;
+    const few = /\b(partial|part|some|few|couple|small|little|handful|only|just|limited)\b/i;
+    if (/\b(full|whole|entire|everything|all (?:my|of|our|the)|complete|house|home|apartment|flat|\d\s*-?\s*(bhk|bed|bedroom|room)s?|bhk|bedrooms?|condo|hdb|family)\b/i.test(t) && !few.test(t)) return ["full", null];
+    if (/\b(box|boxes|cartons?|suitcases?|bags?|luggage|parcels?)\b/i.test(t) && !things.test(t)) return ["boxes", null];
+    if (few.test(t) || things.test(t)) return ["partial", null];
     return [null, null];
   }
   if (step === "date") {
-    if (/\d/.test(t) && !parseDate(t)) return [null, "That date doesn't look right, or it's in the past. Please pick it from the calendar."];
-    return [parseDate(t), null];
+    const d = parseDate(t);
+    if (d) return [d, null];
+    // A full date with a year that is wrong or past; anything else ("15 Dec", "next Friday") the AI may read.
+    if (/\b\d{4}\b/.test(t)) return [null, "That date doesn't look right, or it's in the past. Please pick it from the calendar."];
+    return [null, null];
   }
   if (step === "name") return [parseName(t), null];
   if (step === "email") {
@@ -237,7 +243,10 @@ export function turn(state, text = "", value = "") {
     return [{ ...s, step: nextStep(a), editing: true }, []];
   }
 
-  const asking = !!text && isQuestion(text) && text.split(/\s+/).length > 3;
+  // On steps the AI can read, a long sentence is an answer ("I'm moving to Kochi in Kerala"),
+  // so only a real question (a "?" or a question word) counts as one.
+  const question_ = UNDERSTAND[step] ? text.endsWith("?") || QUESTION_START.test(text) : isQuestion(text);
+  const asking = !!text && question_ && text.split(/\s+/).length > 3;
   let answer = null, problem = null, extra = null;
   if (value && step !== "edit" && step !== "confirm") [answer, problem, extra] = [value, null, null];
   else if (step !== "edit" && step !== "confirm" && !asking) [answer, problem, extra] = parse(step, value || text, a);
@@ -255,20 +264,48 @@ export function turn(state, text = "", value = "") {
   }
   if (problem) return [s, [problem]];
 
-  if (text && (asking || isQuestion(text) || step === "edit" || step === "confirm")) {
+  if (text && (asking || question_ || step === "edit" || step === "confirm")) {
     const fixed = fixedAnswer(text, a);
     return fixed ? [s, [fixed]] : [s, [], true];
   }
 
   const hint = {
-    from: "I can help with moves from Singapore and Malaysia for now.",
-    to: "Pick a city below, or choose \"Other city in India\".",
+    from: "I can help with moves from Singapore and Malaysia for now. Tap one below.",
+    to: "Pick a city below, or choose \"Other city in India\" and type its name.",
     fromCity: "Just the city name is perfect, for example Kuala Lumpur.",
     toCity: "Just the city name is perfect, for example Kochi.",
-    date: "Please pick a date from the calendar.",
+    move_type: "Just to check: are you moving your whole home, part of it (for example a few pieces of furniture), or only a few boxes? Tap one below.",
+    date: "Please pick the exact date from the calendar below.",
     name: "Just your first and last name is perfect.",
   }[step] || "Sorry, I didn't catch that.";
-  return [s, [hint]];
+  // The page can ask the AI to read answers our rules couldn't (see UNDERSTAND).
+  return [s, [hint], false, !!text && !!UNDERSTAND[step]];
+}
+
+// Steps whose typed answers the AI may read when our rules can't (never name, email or
+// phone): what kind of answer to ask for. The AI's reply goes through turn() again, so our
+// own rules still check it.
+export const UNDERSTAND = {
+  from: { kind: "choice", choices: { Singapore: "moving from Singapore", Malaysia: "moving from anywhere in Malaysia" } },
+  fromCity: { kind: "place", country: "Malaysia" },
+  to: { kind: "place", country: "India" },
+  toCity: { kind: "place", country: "India" },
+  move_type: { kind: "choice", choices: { full: "their whole home", partial: "part of a home, e.g. some furniture or a few items", boxes: "only boxes, suitcases or bags" } },
+  date: { kind: "date" },
+};
+
+// What the chat understood, shown when the AI read the answer, with the matching "Change" key.
+export function understood(step, a) {
+  const text = {
+    from: () => `moving from ${fromLabel(a)}`,
+    fromCity: () => `moving from ${fromLabel(a)}`,
+    to: () => `moving to ${toLabel(a)}`,
+    toCity: () => `moving to ${toLabel(a)}`,
+    move_type: () => MOVE_TYPES[a.move_type].toLowerCase(),
+    date: () => longDate(a.date),
+  }[step];
+  const edit = { fromCity: "from", toCity: "to" }[step] || step;
+  return text ? [`Got it: ${text()}.`, edit] : null;
 }
 
 /** The finished chat as the booking form's values (see lib/move.js). */

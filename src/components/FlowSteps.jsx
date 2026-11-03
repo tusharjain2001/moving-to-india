@@ -27,13 +27,17 @@ const SHIP_TEXT = {
   "40' FCL": ["Your own 40-foot container (40' FCL)", "The container is only for your goods and ships as soon as it is packed."],
 };
 
-// The price split from the sales sheet (origin, freight, destination and margin rows).
+// The price split from the sales sheet (origin, freight, destination and margin rows, plus the
+// road transport from the port for cities priced through a port, e.g. Chennai to Delhi).
 const BREAKDOWN = [
   ["origin", "Origin charges", "Packing, pickup and transport to the port"],
   ["freight", "Freight charges", "Sea freight to"],
+  ["inland", "Inland transport", "Road transport from"],
   ["destination", "Destination charges", "Customs clearance, delivery to your home and GST"],
   ["margin", "Margin", ""],
 ];
+const breakdownSub = (key, sub, quote, toCity) =>
+  key === "freight" ? `${sub} ${quote.port || "India"}` : key === "inland" ? `${sub} ${quote.via} to ${toCity}` : sub;
 
 /* ── Step 3: quotation ─────────────────────────────────── */
 function PricePanel({ info }) {
@@ -86,11 +90,11 @@ function PricePanel({ info }) {
       )}
       {breakdown && (
         <dl className="price-list breakdown">
-          {BREAKDOWN.map(([key, title, sub]) => (
+          {BREAKDOWN.filter(([key]) => key !== "inland" || breakdown.inland).map(([key, title, sub]) => (
             <div key={key}>
               <dt>
                 {title}
-                {sub && <span className="small muted block">{key === "freight" ? `${sub} ${quote.port || "India"}` : sub}</span>}
+                {sub && <span className="small muted block">{breakdownSub(key, sub, quote, info.priceCity)}</span>}
               </dt>
               <dd>{money(breakdown[key] || 0)}</dd>
             </div>

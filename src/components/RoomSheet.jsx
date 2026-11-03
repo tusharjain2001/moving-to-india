@@ -60,7 +60,7 @@ export default function RoomSheet({ room, survey, onClose }) {
           <div className="muted small">{meta}</div>
         </div>
         {room.status === "done" && (
-          <button type="button" className="btn-line" onClick={() => survey.resetRoom(room.id)}>Rescan</button>
+          <button type="button" className="btn-line" onClick={() => survey.resetRoom(room.id)}>{room.manual ? "Start over" : "Rescan"}</button>
         )}
       </div>
 
@@ -71,6 +71,11 @@ export default function RoomSheet({ room, survey, onClose }) {
             <span className="choice-icon"><span className="rec-dot" /></span>
             <span><span className="choice-t">Record the room</span><span className="choice-s">Walk around slowly for 20–60 seconds</span></span>
           </button>
+          <button type="button" className="choice" aria-expanded={adding} onClick={() => setAdding(true)}>
+            <span className="choice-icon soft"><Icon name="plus" size={22} strokeWidth={2} /></span>
+            <span><span className="choice-t">Add items without recording</span><span className="choice-s">Pick your furniture from a list, then check the sizes</span></span>
+          </button>
+          {adding && <AddBox catalog={catalog} onPick={(c) => survey.addItem(room.id, c)} onClose={() => setAdding(false)} />}
           {/* Upload turned off for now: recording only. Uncomment to bring it back
               (and use openPicker again as the camera fallback below).
           <button type="button" className="choice" onClick={openPicker}>
@@ -98,7 +103,9 @@ export default function RoomSheet({ room, survey, onClose }) {
             </p>
           )}
           {room.items.length === 0 && (
-            <p className="rp-empty">No furniture found in this video. Record again with better light, or add items yourself.</p>
+            <p className="rp-empty">
+              {room.manual ? "No items yet. Add your furniture below." : "No furniture found in this video. Record again with better light, or add items yourself."}
+            </p>
           )}
           <ul className="irows">
             {room.items.map((it) => (
@@ -112,17 +119,11 @@ export default function RoomSheet({ room, survey, onClose }) {
           </ul>
           <div className="rp-pad">
             {adding ? (
-              <div className="add-box">
-                <div className="between"><span className="strong">Add an item</span><button type="button" className="link" onClick={() => setAdding(false)}>Close</button></div>
-                <div className="chips">
-                  {catalog.length === 0 && <span className="muted small">Loading items…</span>}
-                  {catalog.map((c) => (
-                    <button type="button" key={c.key} onClick={() => { survey.addItem(room.id, c); setAdding(false); }}>{c.label}</button>
-                  ))}
-                </div>
-              </div>
+              <AddBox catalog={catalog} onPick={(c) => survey.addItem(room.id, c)} onClose={() => setAdding(false)} />
             ) : (
-              <button type="button" className="dashed" onClick={() => setAdding(true)}>+ Add an item the camera missed (boxes, lamps…)</button>
+              <button type="button" className="dashed" onClick={() => setAdding(true)}>
+                {room.manual ? "+ Add more items" : "+ Add an item the camera missed (boxes, lamps…)"}
+              </button>
             )}
           </div>
           <div className="rp-foot">
@@ -145,6 +146,43 @@ export default function RoomSheet({ room, survey, onClose }) {
       />
       {camera && <CameraRecorder roomName={room.name} onDone={onVideo} onCancel={() => setCamera(false)} onUnsupported={cameraUnsupported} />}
     </section>
+  );
+}
+
+/**
+ * Pick items from the catalog (typical sizes), or type any other item with its size.
+ * Stays open so several items can be added in a row; each one appears in the room's list.
+ */
+function AddBox({ catalog, onPick, onClose }) {
+  const [other, setOther] = useState({ name: "", l: "", w: "", h: "" });
+  const dims = [other.l, other.w, other.h].map((v) => Number(v) / 100);
+  const otherOk = other.name.trim() && dims.every((d) => d > 0);
+  const addOther = (e) => {
+    e.preventDefault();
+    if (!otherOk) return;
+    onPick({ key: "other", label: other.name.trim(), typical: dims });
+    setOther({ name: "", l: "", w: "", h: "" });
+  };
+  return (
+    <div className="add-box">
+      <div className="between"><span className="strong">Add an item</span><button type="button" className="link" onClick={onClose}>Close</button></div>
+      <div className="chips">
+        {catalog.length === 0 && <span className="muted small">Loading items…</span>}
+        {catalog.map((c) => (
+          <button type="button" key={c.key} onClick={() => onPick(c)}>{c.label}</button>
+        ))}
+      </div>
+      <form className="other-item" onSubmit={addOther}>
+        <div className="small strong">Something else?</div>
+        <div className="other-fields">
+          <input className="f-input other-name" maxLength={60} placeholder="Item, e.g. Piano" aria-label="Item name" value={other.name} onChange={(e) => setOther({ ...other, name: e.target.value })} />
+          {[["l", "Length"], ["w", "Width"], ["h", "Height"]].map(([k, label]) => (
+            <input key={k} className="f-input" type="number" min="1" inputMode="numeric" placeholder={`${label} cm`} aria-label={`${label} in cm`} value={other[k]} onChange={(e) => setOther({ ...other, [k]: e.target.value })} />
+          ))}
+          <button type="submit" className="btn-line" disabled={!otherOk}>Add</button>
+        </div>
+      </form>
+    </div>
   );
 }
 

@@ -15,9 +15,8 @@ const FALLBACK_KG_PER_M3 = 110; // the AI survey gives no weights; same estimate
 
 export const DEFAULT_SHIPMENT_MODE = "SEA"; // AIR | SEA | ROAD
 export const DEFAULT_SHIPMENT_TYPE = "CONSOLE"; // CONSOLE | FCL
-// Same flag as the Malaysia project: the backend team asked for it while they test.
-// Set to false once they confirm testing is finished.
-export const TEST_LEAD = true;
+// No test_lead flag: the backend team asked us to stop sending it (Nov 2026), so orders are
+// kept as real leads instead of expiring after about 2 days.
 
 async function req(path, { method = "GET", body } = {}) {
   let res;
@@ -94,7 +93,6 @@ export function buildBaseOrderPayload(values) {
     shipment_type: DEFAULT_SHIPMENT_TYPE,
     need_packing: true,
     moving_type: MOVING_TYPE[values.size] || "FULL_HOUSEHOLD",
-    test_lead: TEST_LEAD,
   };
 }
 

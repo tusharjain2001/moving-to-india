@@ -7,7 +7,7 @@ const m3 = (v) => `${v.toFixed(v < 10 ? 2 : 1)} m³`;
 function badgeOf(room) {
   const pct = Math.round(room.progress * 100);
   switch (room.status) {
-    case "done": return { text: "✓ Measured", cls: "ok" };
+    case "done": return { text: room.manual ? "✓ Added" : "✓ Measured", cls: "ok" };
     case "uploading": return { text: `Uploading ${pct}%`, cls: "busy" };
     case "processing": return { text: `Measuring ${pct}%`, cls: "busy" };
     case "error": return { text: "Try again", cls: "bad" };
@@ -47,13 +47,14 @@ export default function SurveyStep({ survey, info, onBack, onNext }) {
       </section>
 
       {open ? (
-        <RoomSheet room={open} survey={survey} onClose={() => setOpenId(null)} />
+        <RoomSheet key={open.id} room={open} survey={survey} onClose={() => setOpenId(null)} />
       ) : (
         <>
           <div className="rooms-head">
             <h1>Your rooms</h1>
             <span>Tap a room to record or review it</span>
           </div>
+          <p className="small muted rooms-hint">Don't want to record? Open a room and choose “Add items without recording” to pick your furniture yourself.</p>
           <ul className="rooms">
             {rooms.map((r) => {
               const b = badgeOf(r);
@@ -90,7 +91,7 @@ export default function SurveyStep({ survey, info, onBack, onNext }) {
             <button type="button" className="btn-out" onClick={onBack}>← Your move</button>
             <button type="button" className="btn-big only-desktop" onClick={onNext}>Next: quotation <span aria-hidden="true">→</span></button>
           </div>
-          <p className="fine">Sizes are AI estimates from your video. Items marked “Check size” or “Estimate” are worth a quick look.</p>
+          <p className="fine">Sizes are AI estimates from your video, or typical sizes for items you add yourself. Items marked “Check size”, “Estimate” or “Added” are worth a quick look.</p>
         </>
       )}
     </>
