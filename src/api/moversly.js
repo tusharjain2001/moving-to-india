@@ -76,7 +76,8 @@ const countryOf = (s) => {
 };
 
 export function buildBaseOrderPayload(values) {
-  // The backend reads moving_date as a number: epoch milliseconds.
+  // The backend reads moving_date as a number: epoch SECONDS (their tech team, Nov 2026).
+  // Milliseconds showed as year ~58800 in their admin.
   const ts = Date.parse(values.date || "");
   return {
     name: values.name || "",
@@ -88,7 +89,7 @@ export function buildBaseOrderPayload(values) {
     destination_country: countryOf(values.dest) || "India",
     destination_postal_code: "",
     destination_address: values.dest || "",
-    moving_date: Number.isFinite(ts) ? ts : 0,
+    moving_date: Number.isFinite(ts) ? Math.floor(ts / 1000) : 0,
     shipment_mode: DEFAULT_SHIPMENT_MODE,
     shipment_type: DEFAULT_SHIPMENT_TYPE,
     need_packing: true,
