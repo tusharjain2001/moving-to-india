@@ -3,7 +3,7 @@ import logo from "../assets/logo.png";
 import { loadStripe } from "../api/moversly";
 import { openPayment } from "../api/pricing";
 import { INDIA_IMPORT, SG_EXPORT } from "../data/content";
-import { EXCLUSIONS, GENERAL_DOCS, TERMS, fmtDate, money } from "../lib/quote";
+import { EXCLUSIONS, GENERAL_DOCS, TERMS, fmtDate, money, optionId } from "../lib/quote";
 import Icon from "./Icons";
 
 // Steps 3–5 of the v4 design: quotation, payment (Stripe), Move Pass, documents.
@@ -38,6 +38,7 @@ const BREAKDOWN = [
 ];
 const breakdownSub = (key, sub, quote, toCity) =>
   key === "freight" ? `${sub} ${quote.port || "India"}` : key === "inland" ? `${sub} ${quote.via} to ${toCity}` : sub;
+const WORDS = { 2: "two", 3: "three", 4: "four" };
 
 /* ── Step 3: quotation ─────────────────────────────────── */
 function PricePanel({ info }) {
@@ -72,14 +73,16 @@ function PricePanel({ info }) {
       </dl>
       {options.length > 1 && (
         <fieldset className="ship-opts">
-          <legend className="strong">Your volume fits two ways to ship. Choose one:</legend>
+          <legend className="strong">Your volume fits {WORDS[options.length] || options.length} ways to ship. Choose one:</legend>
           {options.map((o) => {
             const [title, sub] = SHIP_TEXT[o.type] || [o.type, ""];
+            const twoPorts = options.filter((x) => x.type === o.type).length > 1;
+            const on = optionId(o) === optionId(quote);
             return (
-              <label key={o.type} className={`ship-opt ${o.type === quote.type ? "on" : ""}`}>
-                <input type="radio" name="ship-opt" checked={o.type === quote.type} onChange={() => info.choose(o.type)} />
+              <label key={optionId(o)} className={`ship-opt ${on ? "on" : ""}`}>
+                <input type="radio" name="ship-opt" checked={on} onChange={() => info.choose(optionId(o))} />
                 <span className="grow">
-                  <span className="strong">{title}</span>
+                  <span className="strong">{title}{twoPorts && ` via ${o.via || String(o.port || "").split(",")[0]}`}</span>
                   <span className="small muted block">{sub}</span>
                 </span>
                 <span className="strong nowrap">{money(o.price)}</span>
@@ -195,7 +198,7 @@ export function QuoteStep({ info, onBack, onNext, nextLabel, nextDisabled }) {
 // unfinished payment on every visit.
 const intents = new Map();
 function paymentFor({ orderId, quote, city, origin, email, name }) {
-  const key = `${orderId}:${quote.type}:${quote.price}`;
+  const key = `${orderId}:${optionId(quote)}:${quote.price}`;
   if (!intents.has(key)) {
     intents.set(key, openPayment({ orderId, quote, city, origin, email, name }).catch((e) => {
       intents.delete(key);

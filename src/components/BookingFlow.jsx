@@ -3,7 +3,7 @@ import { cityByName } from "../data/content";
 import { deepGet, savePricingSplit, updateOrderWithItems } from "../api/moversly";
 import { getSheetPrice } from "../api/pricing";
 import { placeCity, placeCode } from "../lib/move";
-import { transitOf, fmtDate, money } from "../lib/quote";
+import { transitOf, fmtDate, money, optionId } from "../lib/quote";
 import { M3_TO_FT3, roomVolume, shippingGuide } from "../lib/units";
 import { boxItems, boxVolume } from "../lib/boxes";
 import { useSurvey } from "../lib/useSurvey";
@@ -95,10 +95,11 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, sig, attempt]);
 
-  // Console (shared, slower) or 20' FCL (own container, faster) where both fit: the
-  // chosen option's fields replace the top-level ones, and the order gets the new price.
-  const choose = (type) => {
-    const next = { ...quote, ...quote.options.find((o) => o.type === type) };
+  // Console (shared, slower) or 20' FCL (own container, faster) where both fit, or the same
+  // container through two ports (Chittoor): the chosen option's fields (price, port, via,
+  // breakdown) replace the top-level ones, and the order gets the new price.
+  const choose = (id) => {
+    const next = { ...quote, ...quote.options.find((o) => optionId(o) === id) };
     update({ ...move, quote: next });
     savePricingSplit(move.orderId, next).catch((e) => console.warn("create-pricing-with-split failed:", e));
   };
@@ -106,7 +107,8 @@ export default function BookingFlow({ step, move, update, go, onNewMove }) {
   // The sheet price changed between the quotation and payment: keep the chosen option at its new price.
   // (Our server saves the new price on the order when it opens the payment.)
   const priceChanged = (fresh) => {
-    const chosen = fresh.options?.find((o) => o.type === quote.type);
+    const chosen =
+      fresh.options?.find((o) => optionId(o) === optionId(quote)) || fresh.options?.find((o) => o.type === quote.type);
     update({ ...move, quote: chosen ? { ...quote, ...fresh, ...chosen } : { ...quote, ...fresh } });
   };
 

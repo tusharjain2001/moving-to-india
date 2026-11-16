@@ -1,10 +1,11 @@
 // Price from the sales team's Google Sheet "Singapore to India Export", read by
 // our server (moversely ai/survey/prices.py) with the Google service account:
 //   GET /prices?route=india&city=<City>&cft=<CFT>&origin=<Singapore|Malaysia>
-//   -> { price, currency, cft, band, type, shipment_type, container_type, port, tab }
+//   -> { id, price, currency, cft, band, type, shipment_type, container_type, breakdown, port, via, tab, options }
 //   or { price: null, cft, reason }  (origin | city | volume: our team quotes instead)
-// The server finds the city tab and CFT band, takes "Quote Amount (SGD)", and
-// uses the cheaper of Console and 20' FCL where both fit (351–600 CFT).
+// options: every way to ship (cheapest first, = the top-level fields): Console and 20' FCL
+// where both fit (351–600 CFT), and the same container through two ports for a few cities
+// (Chittoor: via Chennai or ICD Bangalore). Each option has its own id, port and via.
 import { M3_TO_FT3 } from "../lib/units";
 import { SURVEY_API_URL } from "./survey";
 
@@ -21,7 +22,7 @@ export async function getSheetPrice({ origin, city, volumeM3 }) {
 }
 
 // Payment with the amount set by our server, not the browser:
-//   POST /payment {order_id, route, origin, city, cft, type, price, email, name, origin_port, destination_port}
+//   POST /payment {order_id, route, origin, city, cft, type, option, price, email, name, origin_port, destination_port}
 //   -> { client_secret, price, currency }
 // The server looks the price up in the sheet again, saves it on the order and opens the
 // Stripe payment on api.moversly.com. Errors carry `code`: "price_changed" (with the new
@@ -39,6 +40,7 @@ export async function openPayment({ orderId, quote, city, origin, email, name })
         city,
         cft: quote.cft,
         type: quote.type,
+        option: quote.id || "",
         price: quote.price,
         email,
         name,

@@ -6,6 +6,10 @@ export const transitOf = () => SEA_TRANSIT;
 
 export const money = (n) => "SGD " + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Each price option has an id: its type ("Console"), or "20' FCL via ICD Bangalore" when a city
+// can ship the same container type through two ports (e.g. Chittoor). Older answers have no id.
+export const optionId = (o) => o?.id || o?.type;
+
 export const TERMS = [
   "The price is for the volume band shown, based on your AI survey. APAC Relocation reviews your inventory and confirms the details in writing.",
   "If the volume at pickup is different, the price is adjusted to the matching band.",
@@ -26,6 +30,11 @@ export const EXCLUSIONS = [
   "Customs duty/tax, quarantine charges, X-ray/Gamma Radiation scanning fee, examination fee, and any govt charges if any at the destination.",
   "Port storage charges/container detention charges. These charges can be applicable in following cases: lack of necessary documents, non-availability of the client for the delivery and any delay in the release of shipment from customs due to holidays, technical issues in customs website and unexpected issues like port congestions, natural calamities, and strikes.",
   "Warehouse handling charges (in/out) other than indicated in the proposal. These charges are applicable only if storage is required by the client at origin/destination.",
+  // Added 2026-11-15 at the manager's request.
+  "Crating charges.",
+  "Accessorial charges.",
+  "Bad access charges.",
+  "Handyman service charges.",
 ];
 
 export const GENERAL_DOCS = [
