@@ -261,6 +261,7 @@ textarea.f-input { height: auto; padding: 10px 12px; resize: vertical; }
 .links button:hover { color: var(--accent-700); }
 .links button.accent { color: var(--accent-700); }
 .links a.ink { color: var(--text); }
+.links a.ink:hover { color: var(--accent-700); }
 
 .how { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 32px 28px; }
 .how li { display: grid; gap: 10px; align-content: start; }

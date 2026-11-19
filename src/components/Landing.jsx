@@ -81,7 +81,7 @@ export default function Landing({ values, setValues, onSubmitted }) {
           <div className="lp-wrap hero2-in">
             <div className="hero2-text">
               <span className="hero2-kicker">International moving</span>
-              <h1>Move to India with <span className="accent-text">Confidence</span></h1>
+              <h1>Get an Instant <span className="accent-text">Moving Quote</span> to India</h1>
               <p className="hero2-lede">
                 Book your international move online and get an instant, transparent quote with our AI-powered room survey.
               </p>
@@ -151,6 +151,9 @@ export default function Landing({ values, setValues, onSubmitted }) {
             </div>
             <div className="links center">
               <button type="button" onClick={openChat}>Questions? Ask our AI assistant</button>
+              <a className="ink" href="https://apacrelocation.com/moving/international-movers/moving-to-india-from-singapore/">
+                Read our full guide: Moving to India from Singapore
+              </a>
             </div>
           </div>
         </section>
